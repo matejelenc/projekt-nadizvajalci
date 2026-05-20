@@ -119,38 +119,50 @@ class Importer:
             l.name = row.name,
             l.latitude = row.latitude,
             l.longitude = row.longitude,
-            l.type = row.type
+            l.type = row.type,
+            l.admin_level = CASE WHEN row.admin_level IS NOT NULL THEN row.admin_level ELSE l.admin_level END
 
         WITH l, row
-        WHERE row.part_of IS NOT NULL
+        CALL apoc.create.addLabels(l, [row.type]) YIELD node
+
+        WITH l, row
+        WHERE row.part_of IS NOT NULL AND row.part_of <> ""
 
         MERGE (p:Location {id: row.part_of})
         MERGE (l)-[:PART_OF]->(p)
         """
         self._import_jsonl_batched(jsonl_path, query)
 
-    def import_articles(self, jsonl_path : str):
+    def import_articles(self, jsonl_path: str):
         """Import articles from jsonl file."""
 
-        constraint = "CREATE CONSTRAINT article_id IF NOT EXISTS FOR (a:Article) REQUIRE a.id IS UNIQUE"
-        self._query(constraint)
+        article_constraint = """
+        CREATE CONSTRAINT article_id IF NOT EXISTS
+        FOR (a:Article)
+        REQUIRE a.id IS UNIQUE
+        """
+
+        figure_constraint = """
+        CREATE CONSTRAINT figure_id IF NOT EXISTS
+        FOR (f:Figure)
+        REQUIRE f.id IS UNIQUE
+        """
+
+        self._query(article_constraint)
+        self._query(figure_constraint)
 
         query = """
         UNWIND $rows AS row
 
         MERGE (a:Article {id: row.id})
 
-        // Only set properties if they exist.
+        // Article properties
         FOREACH (_ IN CASE WHEN row.title IS NOT NULL THEN [1] ELSE [] END |
             SET a.title = row.title
         )
 
         FOREACH (_ IN CASE WHEN row.url IS NOT NULL THEN [1] ELSE [] END |
             SET a.url = row.url
-        )
-
-        FOREACH (_ IN CASE WHEN row.figures IS NOT NULL THEN [1] ELSE [] END |
-            SET a.figures = row.figures
         )
 
         FOREACH (_ IN CASE WHEN row.n_comments IS NOT NULL THEN [1] ELSE [] END |
@@ -160,7 +172,23 @@ class Importer:
         FOREACH (_ IN CASE WHEN row.date IS NOT NULL THEN [1] ELSE [] END |
             SET a.date = datetime(row.date)
         )
+
+        // Figures
+        FOREACH (fig IN coalesce(row.figures, []) |
+
+            MERGE (f:Figure {
+                id: row.id + "_" + coalesce(fig.img, "")
+            })
+
+            SET
+                f.caption = fig.caption,
+                f.img = fig.img,
+                f.source = fig.source
+
+            MERGE (a)-[:HAS_FIGURE]->(f)
+        )
         """
+
         self._import_jsonl_batched(jsonl_path, query)
 
 

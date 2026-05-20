@@ -14,9 +14,9 @@ def louvain(
         df_network: pd.DataFrame, 
         output_filename: str = "geo_nodes.html", 
         max_nodes: int = 10000,
-        min_node_size: int = 3,
-        max_node_size: int = 25,
-        node_scale_factor: float = 0.6,
+        min_node_size: int = 10,
+        max_node_size: int = 50,
+        node_scale_factor: float = 0.7,
         color_mode: Literal["dark", "light"] = "dark" 
         ):
     """
@@ -79,7 +79,7 @@ def louvain(
     fig = go.Figure()
     fig.add_trace(go.Scattergeo(
         lon=node_lons, lat=node_lats, mode='markers', text=hover_texts, hoverinfo='text',
-        marker=dict(size=node_sizes, color=plotly_colors, line=dict(width=0.3, color=theme["bg"]), opacity=0.85)
+        marker=dict(size=node_sizes, color=plotly_colors, line=dict(width=0.3, color=theme["bg"]), opacity=0.90)
     ))  
 
     # Configure plot.

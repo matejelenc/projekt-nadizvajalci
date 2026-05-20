@@ -30,6 +30,7 @@ app = [
     "scikit-learn",
     "scipy",
     "umap-learn",
+    "python-dotenv"
 ]
 
 [[tool.uv.index]]

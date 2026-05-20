@@ -66,7 +66,7 @@ class Client:
 
     def _ml_features(
             self, 
-            location_type: Literal["City", "Region", "Country", "Continent"] = "City", 
+            location_type: str = "Settlement", 
             scope_name: Optional[str] = None
         ) -> pd.DataFrame:
         """
@@ -76,7 +76,7 @@ class Client:
         Args:
             location_type (str): Location type to use as nodes.
             scope_name (str): Part of the world for which to query. An example would
-                location_type='City' and scope_name='Slovenia', or location_type='Country'
+                location_type='Settlement' and scope_name='Slovenia', or location_type='SovereignState'
                 and scope_name='Europe'.
         
         Returns:
@@ -111,7 +111,7 @@ class Client:
 
     def sankey(
             self, 
-            location_type: Literal["City", "Region", "Country", "Continent"] = "City", 
+            location_type: str = "Settlement", 
             scope_name: Optional[str] = None
         ) -> pd.DataFrame:
         """Fetch data for a sankey diagram."""
@@ -119,9 +119,9 @@ class Client:
 
     def umap(
             self,
-            location_type: Literal["City", "Region", "Country", "Continent"] = "City", 
+            location_type: str = "Settlement", 
             scope_name: Optional[str] = None,
-            min_articles:int = 5
+            min_articles:int = 1
         ) -> pd.DataFrame:
         """
         Calculates topic/sentiment distributions per location and reduces them to 2D space.
@@ -129,7 +129,7 @@ class Client:
         Args:
             location_type (str): Location type to use as nodes.
             scope_name (str): Part of the world on which to run UMAP. An example would
-                location_type='City' and scope_name='Slovenia', or location_type='Country'
+                location_type='Settlement' and scope_name='Slovenia', or location_type='SovereignState'
                 and scope_name='Europe'.
             min_articles (int): Minimum number of articles for considering a location.
 
@@ -178,10 +178,10 @@ class Client:
     
     def kmeans(
             self,
-            location_type: Literal["City", "Region", "Country", "Continent"] = "City", 
+            location_type: str = "Settlement", 
             scope_name: Optional[str] = None, 
             k_clusters: int = 4, 
-            min_articles: int = 5
+            min_articles: int = 1
         ) -> pd.DataFrame:
         """
         Groups locations based on Engagement (comments) and Sentiment.
@@ -189,7 +189,7 @@ class Client:
         Args:
             location_type (str): Location type to use as nodes.
             scope_name (str): Part of the world on which to run k-means. An example would
-                location_type='City' and scope_name='Slovenia', or location_type='Country'
+                location_type='Settlement' and scope_name='Slovenia', or location_type='SovereignState'
                 and scope_name='Europe'.
             k_clusters (int): Number of clusters.
             min_articles (int): Minimum number of articles required to consider a location.
@@ -229,7 +229,7 @@ class Client:
 
     def louvain(
             self,
-            location_type: Literal["City", "Region", "Country", "Continent"] = "City", 
+            location_type: str = "Settlement", 
             scope_name: Optional[str] = None
         ) -> pd.DataFrame:
         """
@@ -239,7 +239,7 @@ class Client:
         Args:
             location_type (str): Location type to use as nodes.
             scope_name (str): Part of the world on which to run Louvain. An example would
-                location_type='City' and scope_name='Slovenia', or location_type='Country'
+                location_type='Settlement' and scope_name='Slovenia', or location_type='SovereignState'
                 and scope_name='Europe'.
         
         Returns:
@@ -302,7 +302,7 @@ class Client:
     
     def temporal(
             self,
-            location_type: Literal["City", "Region", "Country", "Continent"] = "City", 
+            location_type: str = "Settlement", 
             scope_name: Optional[str] = None
         ) -> pd.DataFrame:
         """
@@ -311,7 +311,7 @@ class Client:
         Args:
             location_type (str): Location type to use as nodes.
             scope_name (str): Part of the world for which to extract temporal data. An example would
-                location_type='City' and scope_name='Slovenia', or location_type='Country'
+                location_type='Settlement' and scope_name='Slovenia', or location_type='SovereignState'
                 and scope_name='Europe'.
         
         Returns:
@@ -340,7 +340,7 @@ class Client:
     
     def lasso_regression(
             self,
-            location_type: Literal["City", "Region", "Country", "Continent"] = "City", 
+            location_type: str = "Settlement", 
             scope_name: Optional[str] = None
         ) -> pd.DataFrame:
         """
@@ -349,7 +349,7 @@ class Client:
         Args:
             location_type (str): Location type to use as nodes.
             scope_name (str): Part of the world on which to run regression. An example would
-                location_type='City' and scope_name='Slovenia', or location_type='Country'
+                location_type='Settlement' and scope_name='Slovenia', or location_type='SovereignState'
                 and scope_name='Europe'.
         
         Returns:
@@ -387,7 +387,7 @@ class Client:
     
     def enrichment(
             self,
-            location_type: Literal["City", "Region", "Country", "Continent"] = "City", 
+            location_type: str = "Settlement", 
             scope_name: Optional[str] = None,
             min_articles: int = 5
         ) -> pd.DataFrame:
@@ -397,7 +397,7 @@ class Client:
         Args:
             location_type (str): Location type to use as nodes.
             scope_name (str): Part of the world on which to run Louvain. An example would
-                location_type='City' and scope_name='Slovenia', or location_type='Country'
+                location_type='Settlement' and scope_name='Slovenia', or location_type='SovereignState'
                 and scope_name='Europe'.
             min_articles (int): Minimum number of articles to consider a location.
         """

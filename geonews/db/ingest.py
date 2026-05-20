@@ -3,6 +3,7 @@
 import logging
 import argparse
 import os
+from dotenv import load_dotenv
 
 from geonews.db import Importer, Client
 
@@ -31,13 +32,14 @@ def get_args():
 
 def main():
     # Create importer.
+    load_dotenv()
     db_user = os.getenv("DB_USER")
     db_password = os.getenv("DB_PASSWORD")
     db_endpoint = os.getenv("DB_ENDPOINT")
 
     if db_user is None or db_password is None or db_endpoint is None:
         logger.error("Database configuration not provided in .env, cannot connect.")
-    importer = Importer(db_user, db_password, db_endpoint) # type: ignore
+    importer = Importer(db_endpoint, db_user, db_password) # type: ignore
 
     clean_dir = "./data/clean"
     args = get_args()

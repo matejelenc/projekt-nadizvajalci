@@ -6,7 +6,6 @@ import argparse
 
 from dataclasses import asdict
 
-from geonews.nlp import location, sentiment, topic, article
 from geonews.nlp.util import yaml_to_jsonl, to_jsonl
 
 logger = logging.getLogger(__name__)
@@ -61,6 +60,7 @@ def get_args():
 
 def process_articles(jsonl_path : str, clean_dir : str):
     """Helper function for extracting relevant article info."""
+    from geonews.nlp import article
 
     articles = article.preprocess(jsonl_path)
     logger.info("Preprocessed articles.")
@@ -72,6 +72,7 @@ def process_articles(jsonl_path : str, clean_dir : str):
 
 def process_topics(jsonl_path : str, clean_dir : str):
     """Helper function for extracting topics."""
+    from geonews.nlp import topic
 
     has_topic, topics = topic.preprocess(jsonl_path)
     logger.info("Preprocessed topics.")
@@ -88,6 +89,7 @@ def process_topics(jsonl_path : str, clean_dir : str):
 
 def process_sentiments(jsonl_path: str, clean_dir : str, cuda_id : int, batch_size : int):
     """Helper function for extracting sentiments."""
+    from geonews.nlp import sentiment
 
     sent_extractor = sentiment.SentimentExtractor(cuda_id)
     has_sentiment, sentiments = sentiment.preprocess(jsonl_path, batch_size, sent_extractor)
@@ -113,6 +115,7 @@ def process_locations(
         min_count : int
     ):
     """Helper function for extracting locations."""
+    from geonews.nlp import location
 
     all_countries_path = os.path.join(raw_dir, "allCountries.txt")
     country_info_path = os.path.join(raw_dir, "countryInfo.txt")
@@ -140,7 +143,6 @@ def process_locations(
     to_jsonl(mentions_loc_data, mention_loc_path)
     logger.info("Article->Location mapping saved at %s", mention_loc_path)
 
-
 def main():
     # Setup logging and parse arguments.
     setup_logging()
@@ -154,7 +156,7 @@ def main():
 
     # Convert yaml to jsonl for faster loading.
     yaml_path = os.path.join(raw_dir, "mmc.yaml")
-    jsonl_path = os.path.join(raw_dir, "mmc.jsonl")
+    jsonl_path = os.path.join(raw_dir, "mmc_200.jsonl")
 
     if not os.path.exists(jsonl_path):
         yaml_to_jsonl(yaml_path, jsonl_path)
