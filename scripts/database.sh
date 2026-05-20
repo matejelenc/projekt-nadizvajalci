@@ -38,7 +38,7 @@ HAS_DATA=$(docker exec uozp_neo4j cypher-shell -u "$DB_USER" -p "$DB_PASSWORD" \
 
 if [ "$HAS_DATA" -eq "0" ]; then
   echo "Importing data..."
-  uv run python -m geonews.db.ingest
+  uv run python -u -m geonews.db.ingest
 else
   echo "Database already contains data. Skipping import."
 fi
