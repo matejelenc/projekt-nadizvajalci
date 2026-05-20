@@ -2,8 +2,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 .venv
-*.yaml
-*.jsonl
-*.txt
 .env
+data/**/*
+logs/**/*
 !*.gitkeep
