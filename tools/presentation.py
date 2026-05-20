@@ -2,6 +2,8 @@
 import os
 import logging
 
+from dotenv import load_dotenv
+
 from geonews.db import Client
 from geonews import plot
 
@@ -9,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 def main():
     # Create client.
+    load_dotenv()
     db_user = os.getenv("DB_USER")
     db_password = os.getenv("DB_PASSWORD")
     db_endpoint = os.getenv("DB_ENDPOINT")
@@ -18,7 +21,7 @@ def main():
 
     plot_dir = "./data/plots"
     os.makedirs(plot_dir, exist_ok=True)
-    for location_type, scope_name in zip(["Region", "Country"], ["Slovenia", None]):
+    for location_type, scope_name in zip(["Settlement", "SovereignState"], ["Republic of Slovenia", None]):
         for color_theme in ["dark", "light"]:
             # Run Louvain and plot on world map.
             output_path = os.path.join(plot_dir, f"louvain_{location_type}_{color_theme}.html")
