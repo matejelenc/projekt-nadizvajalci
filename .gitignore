@@ -6,3 +6,4 @@ __pycache__/
 *.jsonl
 *.txt
 .env
+!*.gitkeep
