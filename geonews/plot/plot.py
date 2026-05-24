@@ -199,6 +199,7 @@ def temporal(
     
     # Smooth the lines visually and remove the gaps between data points.
     fig.update_traces(line=dict(width=0), mode='lines')
+    fig.update_layout(margin=dict(r=150))
     fig.write_html(output_filename)
 
 def kmeans(
@@ -338,5 +339,7 @@ def nomogram(
     
     # Clean up the y-axis labels for readability.
     fig.update_yaxes(ticktext=[t.replace('Loc_', 'Location: ').replace('Topic_', 'Topic: ').replace('Sent_', 'Sentiment: ') for t in plot_df['Feature']], 
-                     tickvals=plot_df['Feature'])            
+                     tickvals=plot_df['Feature'])   
+
+    fig.update_layout(margin=dict(r=150))         
     fig.write_html(output_filename)
