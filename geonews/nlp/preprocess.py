@@ -156,7 +156,7 @@ def main():
 
     # Convert yaml to jsonl for faster loading.
     yaml_path = os.path.join(raw_dir, "mmc.yaml")
-    jsonl_path = os.path.join(raw_dir, "mmc_200.jsonl")
+    jsonl_path = os.path.join(raw_dir, "mmc.jsonl")
 
     if not os.path.exists(jsonl_path):
         yaml_to_jsonl(yaml_path, jsonl_path)

@@ -115,6 +115,10 @@ class LocationExtractor:
         potential_mentions: list[list[str]] = []
 
         for content in contents:
+            if not content or not content.strip():
+                potential_mentions.append([])
+                continue
+            
             doc = self.nlp(content)
             content_mentions: set[str] = set()
 

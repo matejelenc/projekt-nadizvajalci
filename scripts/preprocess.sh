@@ -2,7 +2,7 @@
 #SBATCH --job-name=preprocess
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=32G
-#SBATCH --time=00:30:00
+#SBATCH --time=48:00:00
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
 #SBATCH --output=logs/slurm/%j_stdout.log
