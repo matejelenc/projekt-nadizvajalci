@@ -62,10 +62,10 @@ def mentions_to_locations(
     mention_counts: Mapping[str, int],
     geonames: GeoNames,
     *,
-    similarity: float = 0.88,
+    similarity: float = 0.90,
     min_count: int = 1,
     allow_risky_containment: bool = False,
-    frequency_boost_strength: float = 0.02
+    frequency_boost_strength: float = 0.03
 ) -> tuple[list[Location], dict[str, str]]:
     """
     Execute the full automatic pipeline for location extraction and resolution.
@@ -149,8 +149,10 @@ def preprocess(
         batch_size: int,
         extractor: LocationExtractor,
         geonames: GeoNames,
-        similarity: float = 0.88,
+        similarity: float = 0.90,
         min_count: int = 1,
+        allow_risky_containment: bool = False,
+        frequency_boost_strength: float = 0.03
         ) -> tuple[list[MentionsLocations], list[Location]]:
     """Extracts locations from articles.
 
@@ -201,7 +203,9 @@ def preprocess(
         mention_counts=location_counts, 
         geonames=geonames, 
         similarity=similarity, 
-        min_count=min_count
+        min_count=min_count,
+        allow_risky_containment=allow_risky_containment,
+        frequency_boost_strength=frequency_boost_strength
     )
 
     articles : list[MentionsLocations] = list()

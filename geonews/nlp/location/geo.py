@@ -18,11 +18,13 @@ class Location:
     Attributes:
         id (str): The unique identifier for the location.
         name (str): The canonical name of the location.
+        aliases (list[str]): Alternative names used for fuzzy search.
         latitude (float): The latitude coordinate.
         longitude (float): The longitude coordinate.
     """
     id: str
     name: str
+    aliases: list[str]
     latitude: float
     longitude: float
 
@@ -76,15 +78,6 @@ class Continent(Location):
     """A continent-level location."""
     pass
 
-
-# Backward-compatible aliases for older imports. New objects still use the new
-# class names, so Location.labels returns Settlement / AdministrativeDivision /
-# SovereignState.
-City = Settlement
-Region = AdministrativeDivision
-Country = SovereignState
-
-
 @dataclass(frozen=True)
 class GeoCandidate:
     """A candidate matched from GeoNames for a given location query.
@@ -101,7 +94,6 @@ class GeoCandidate:
     matched_name: str
     score: float
     support_count: int
-
 
 class GeoNames:
     """
@@ -203,13 +195,13 @@ class GeoNames:
 
         self.sovereign_state_coords = (
             self.df[self.df["feature_code"].isin(self.SOVEREIGN_STATE_FEATURE_CODES)]
-            .set_index("country_code")[["latitude", "longitude"]]
+            .set_index("country_code")[["latitude", "longitude", "alternatenames"]]
             .to_dict("index")
         )
 
         self.admin1_coords = (
             self.df[self.df["feature_code"] == "ADM1"]
-            .set_index("region_code_full")[["latitude", "longitude"]]
+            .set_index("region_code_full")[["latitude", "longitude", "alternatenames"]]
             .to_dict("index")
         )
 
@@ -222,7 +214,7 @@ class GeoNames:
                 (self.df["feature_class"] == self.CONTINENT_FEATURE[0])
                 & (self.df["feature_code"] == self.CONTINENT_FEATURE[1])
             ]
-            .set_index("name_norm")[["latitude", "longitude"]]
+            .set_index("name_norm")[["latitude", "longitude", "alternatenames"]]
             .to_dict("index")
         )
 
@@ -369,14 +361,17 @@ class GeoNames:
             df["population"],
             errors="coerce",
         ).fillna(0)
+
         df["geonameid"] = pd.to_numeric(
             df["geonameid"],
             errors="coerce",
         ).astype(int)
+
         df["latitude"] = pd.to_numeric(
             df["latitude"],
             errors="coerce",
         ).fillna(0.0)
+
         df["longitude"] = pd.to_numeric(
             df["longitude"],
             errors="coerce",
@@ -453,6 +448,22 @@ class GeoNames:
         if not text or text.lower() == "nan":
             return ""
         return text
+
+    @staticmethod
+    def _aliases_from_value(value: object) -> list[str]:
+        """Get aliases from value.
+        
+        Args:
+            value (object): Value.
+
+        Returns:
+            list[str]: Aliases.
+        """
+        if value is None:
+            return []
+        if isinstance(value, float) and pd.isna(value):
+            return []
+        return [alias.strip() for alias in str(value).split(",") if alias.strip()]
 
     @classmethod
     def _admin_level_from_feature_code(cls, feature_code: object) -> Optional[int]:
@@ -607,6 +618,7 @@ class GeoNames:
             index[admin_code] = {
                 "geonameid": int(row["geonameid"]),
                 "name": str(row["name"]),
+                "alternatenames": str(row.get("alternatenames", "")),
                 "latitude": float(row["latitude"]),
                 "longitude": float(row["longitude"]),
                 "admin_level": self._admin_level_from_feature_code(
@@ -857,6 +869,7 @@ class GeoNames:
             self.resolved_locations[continent_id] = Continent(
                 id=continent_id,
                 name=continent_name,
+                aliases=self._aliases_from_value(coords.get("alternatenames", "")),
                 latitude=float(coords["latitude"]),
                 longitude=float(coords["longitude"]),
             )
@@ -916,6 +929,7 @@ class GeoNames:
             self.resolved_locations[sovereign_state_id] = SovereignState(
                 id=sovereign_state_id,
                 name=sovereign_name,
+                aliases=self._aliases_from_value(coords.get("alternatenames", "")),
                 latitude=float(coords["latitude"]),
                 longitude=float(coords["longitude"]),
                 part_of=parent_id,
@@ -1033,7 +1047,7 @@ class GeoNames:
             )
             fallback_coords = self.admin1_coords.get(
                 admin_code_full,
-                {"latitude": 0.0, "longitude": 0.0},
+                {"latitude": 0.0, "longitude": 0.0, "alternatenames": ""},
             )
             lat = (
                 float(latitude)
@@ -1056,6 +1070,12 @@ class GeoNames:
                 AdministrativeDivision(
                     id=administrative_division_id,
                     name=str(name),
+                    aliases=self._aliases_from_value(
+                        metadata.get(
+                            "alternatenames",
+                            fallback_coords.get("alternatenames", ""),
+                        )
+                    ),
                     latitude=lat,
                     longitude=lon,
                     part_of=parent_id,
@@ -1314,6 +1334,7 @@ class GeoNames:
         country_name = country_info.get("country_name", "unknown")
         continent_name = country_info.get("continent_name", "unknown")
         display_name = str(row["name"])
+        aliases = self._aliases_from_value(row.get("alternatenames", ""))
 
         if self._is_settlement(row):  # type: ignore
             admin_code = self._deepest_administrative_division_code_for_row(
@@ -1328,6 +1349,7 @@ class GeoNames:
             loc = Settlement(
                 id=loc_id,
                 name=display_name,
+                aliases=aliases,
                 latitude=lat,
                 longitude=lon,
                 part_of=parent_id,
@@ -1338,6 +1360,7 @@ class GeoNames:
             loc = SovereignState(
                 id=loc_id,
                 name=display_name,
+                aliases=aliases,
                 latitude=lat,
                 longitude=lon,
                 part_of=parent_id,
@@ -1388,6 +1411,7 @@ class GeoNames:
             loc = AdministrativeDivision(
                 id=loc_id,
                 name=display_name,
+                aliases=aliases,
                 latitude=lat,
                 longitude=lon,
                 part_of=parent_id,
@@ -1398,6 +1422,7 @@ class GeoNames:
             loc = Continent(
                 id=loc_id,
                 name=display_name,
+                aliases=aliases,
                 latitude=lat,
                 longitude=lon,
             )
@@ -1455,7 +1480,6 @@ class GeoNames:
                 continue
             seen_ids.add(loc.id)
             locations.append(loc)
-
         return locations
 
     def get_all_locations(self) -> list[Location]:
