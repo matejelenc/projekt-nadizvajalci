@@ -9,5 +9,5 @@
 
 from .extract import LocationExtractor
 from .cluster import cluster_location_mentions
-from .geo import GeoNames, Location, Continent, Country, Region, City
+from .geo import GeoNames, Location, Settlement, AdministrativeDivision, SovereignState, Continent
 from .pipeline import preprocess

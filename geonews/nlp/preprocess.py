@@ -26,7 +26,7 @@ def get_args():
         "--pipeline", 
         nargs='*', 
         type=str,
-        default=["article", "topic", "sentiment", "location"],
+        default=["location"],
         help="Parts of preprocessing to execute."
     )
     parser.add_argument(
@@ -45,7 +45,7 @@ def get_args():
     parser.add_argument(
         "--similarity", 
         type=float, 
-        default=0.88, 
+        default=0.95, 
         help="Threshold for location similarity."
     )
 
@@ -54,6 +54,18 @@ def get_args():
         type=int, 
         default=1, 
         help="Minimum location count."
+    )
+
+    parser.add_argument(
+        "--frequency_boost_strength", 
+        type=float, 
+        default=0.03, 
+    )
+
+    parser.add_argument(
+        "--allow_risky_containment", 
+        type=bool, 
+        default=False, 
     )
 
     return parser.parse_args()
@@ -112,7 +124,9 @@ def process_locations(
         cuda_id : int,
         batch_size : int,
         similarity : float,
-        min_count : int
+        min_count : int,
+        allow_risky_containment : bool,
+        frequency_boost_strength : float
     ):
     """Helper function for extracting locations."""
     from geonews.nlp import location
@@ -129,7 +143,9 @@ def process_locations(
         extractor=loc_extractor,
         geonames=geonames,
         similarity=similarity,
-        min_count=min_count
+        min_count=min_count,
+        allow_risky_containment=allow_risky_containment,
+        frequency_boost_strength=frequency_boost_strength
     )
     logger.info("Preprocessed locations.")
 
@@ -186,7 +202,9 @@ def main():
             cuda_id=args.cuda_id,
             batch_size=args.batch_size,
             similarity=args.similarity,
-            min_count=args.min_count
+            min_count=args.min_count,
+            allow_risky_containment=args.allow_risky_containment,
+            frequency_boost_strength=args.frequency_boost_strength
         )
 
 if __name__ == "__main__":

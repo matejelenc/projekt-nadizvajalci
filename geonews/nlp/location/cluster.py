@@ -12,12 +12,13 @@ import re
 import unicodedata
 
 DIRECTIONAL_MODIFIERS = {
-    "severna", "severni", "severno", "severne", "sever",
-    "južna", "južni", "južno", "južne", "jug",
-    "vzhodna", "vzhodni", "vzhodno", "vzhodne", "vzhod",
-    "zahodna", "zahodni", "zahodno", "zahodne", "zahod",
+    "severna", "severni", "severno", "severne", "sever", "severen",
+    "južna", "južni", "južno", "južne", "jug", "južen",
+    "vzhodna", "vzhodni", "vzhodno", "vzhodne", "vzhod", "vzhoden",
+    "zahodna", "zahodni", "zahodno", "zahodne", "zahod", "zahoden",
     "srednja", "srednji", "srednje", 
-    "centralna", "centralni", "centralno", "centralne",
+    "centralna", "centralni", "centralno", "centralne", "centralen",
+    "jugovzhoden", "jugozahoden", "severnovzhoden", "severnozahoden"
 }
 
 DISTINGUISHING_MODIFIERS = {
@@ -791,7 +792,7 @@ def refine_component_complete_link(
 def cluster_location_mentions(
     mention_counts: Mapping[str, int],
     *,
-    similarity: float = 0.86,
+    similarity: float = 0.90,
     prefix_len: int = 5,
     char_ngram_size: int = 4,
     max_bucket_size: int = 1000,

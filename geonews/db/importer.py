@@ -117,6 +117,7 @@ class Importer:
 
         SET
             l.name = row.name,
+            l.aliases = coalesce(row.aliases, []),
             l.latitude = row.latitude,
             l.longitude = row.longitude,
             l.type = row.type,
