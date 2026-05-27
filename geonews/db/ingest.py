@@ -75,6 +75,10 @@ def main():
     if "location" in pipeline:
         locations_path = os.path.join(clean_dir, "locations.jsonl")
         importer.import_locations(locations_path)
+        logger.info("Imported locations.")
+
+        importer.import_location_search_aliases(locations_path)
+        logger.info("Imported location aliases.")
 
         mentions_loc_path = os.path.join(clean_dir, "mentions_locations.jsonl")
         importer.import_mentions_locations(mentions_loc_path)

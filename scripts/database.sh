@@ -14,7 +14,7 @@ echo "Starting database..."
 docker compose up -d
 
 echo "Waiting for Neo4j to be ready..."
-MAX_WAIT=60   # seconds
+MAX_WAIT=300   # seconds
 ELAPSED=0
 
 until docker exec uozp_neo4j cypher-shell -u "$DB_USER" -p "$DB_PASSWORD" "RETURN 1" > /dev/null 2>&1; do

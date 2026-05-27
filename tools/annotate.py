@@ -14,13 +14,13 @@ from flask import Flask, jsonify, render_template_string, request
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "--data_path", 
-    type=int, 
+    type=str, 
     default="./data/raw/mmc.jsonl",
     help="Path to jsonl file containing articles in original format."
 )
 parser.add_argument(
     "--out_path", 
-    type=int, 
+    type=str, 
     default="./data/raw/annotations.jsonl",
     help="Path to jsonl file where annotations will be stored."
 )
