@@ -10,9 +10,6 @@ fi
 
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
-mkdir -p data/db logs/db
-sudo chown -R 7474:7474 data/db logs/db
-
 echo "Starting database..."
 docker compose up -d
 
