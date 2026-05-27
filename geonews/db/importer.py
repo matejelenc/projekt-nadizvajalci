@@ -234,3 +234,62 @@ class Importer:
         MERGE (a)-[:MENTIONS_LOCATION]->(l)
         """
         self._import_jsonl_batched(jsonl_path, query)
+
+    def import_location_search_aliases(self, jsonl_path: str):
+        """Import searchable location aliases.
+
+        Creates LocationAlias nodes for each location name and alias:
+
+            (:LocationAlias)-[:ALIAS_OF]->(:Location)
+
+        Intended for fast location search using a Neo4j full-text index.
+        """
+
+        alias_constraint = """
+        CREATE CONSTRAINT location_alias_id IF NOT EXISTS
+        FOR (a:LocationAlias)
+        REQUIRE a.id IS UNIQUE
+        """
+
+        fulltext_index = """
+        CREATE FULLTEXT INDEX location_alias_fulltext IF NOT EXISTS
+        FOR (a:LocationAlias)
+        ON EACH [a.value, a.normalized]
+        """
+
+        self._query(alias_constraint)
+        self._query(fulltext_index)
+
+        query = """
+        UNWIND $rows AS row
+
+        MATCH (l:Location {id: row.id})
+
+        WITH l, row,
+             [row.name] + coalesce(row.aliases, []) AS raw_aliases
+
+        UNWIND raw_aliases AS raw_alias
+
+        WITH l, row, trim(raw_alias) AS alias
+        WHERE alias IS NOT NULL AND alias <> ""
+
+        WITH DISTINCT
+             l,
+             row,
+             alias,
+             toLower(alias) AS normalized
+
+        MERGE (a:LocationAlias {
+            id: row.id + "::" + normalized
+        })
+
+        SET
+            a.value = alias,
+            a.normalized = normalized,
+            a.location_id = row.id,
+            a.is_primary = alias = row.name
+
+        MERGE (a)-[:ALIAS_OF]->(l)
+        """
+
+        self._import_jsonl_batched(jsonl_path, query)
