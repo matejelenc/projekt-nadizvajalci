@@ -61,7 +61,7 @@ def louvain(
     node_sizes = [max(min_node_size, min(data['degree'] * node_scale_factor, max_node_size)) for data in node_data.values()] 
 
     # Create color mapping.
-    unique_comms = list(set(node_communities))
+    unique_comms = sorted(set(node_communities))
     cmap = plt.colormaps.get_cmap('tab20')
     plotly_colors = [mcolors.to_hex(cmap(unique_comms.index(c) / max(1, len(unique_comms) - 1))) for c in node_communities]
 

@@ -8,6 +8,7 @@ requires-python = "==3.11.*"
 # Shared dependencies (installed in all environments)
 dependencies = [
     "pandas",
+    "streamlit>=1.57.0",
 ]
 
 [project.optional-dependencies]

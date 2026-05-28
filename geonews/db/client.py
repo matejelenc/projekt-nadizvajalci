@@ -230,8 +230,10 @@ class Client:
     def louvain(
             self,
             location_type: str = "Settlement", 
-            scope_name: Optional[str] = None
+            scope_name: Optional[str] = None,
+            min_articles: int = 1  # <-- add this
         ) -> pd.DataFrame:
+    
         """
         Runs Louvain on a part of the world (specific country, continent).
         Uses .stream() so no permanent changes are made to the database.
@@ -251,10 +253,21 @@ class Client:
         if scope_name:
             node_query = f"""
             MATCH (l:Location {{type: '{location_type}'}})-[:PART_OF*0..5]->(parent:Location {{name: '{scope_name}'}})
+            WITH l
+            MATCH (a:Article)-[:MENTIONS_LOCATION]->(l)
+            WITH l, count(DISTINCT a) as article_count
+            WHERE article_count >= {min_articles}
             RETURN id(l) AS id
             """
         else:
-            node_query = f"MATCH (l:Location {{type: '{location_type}'}}) RETURN id(l) AS id"
+            node_query = f"""
+            MATCH (l:Location {{type: '{location_type}'}})
+            WITH l
+            MATCH (a:Article)-[:MENTIONS_LOCATION]->(l)
+            WITH l, count(DISTINCT a) as article_count
+            WHERE article_count >= {min_articles}
+            RETURN id(l) AS id
+            """
 
         # Create edge query.
         edge_query = f"""
