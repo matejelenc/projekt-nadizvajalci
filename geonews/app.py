@@ -59,9 +59,8 @@ if search_query:
                 st.rerun()
 
 # Use search result if selected, otherwise use preset
-if "search_selected" in st.session_state and search_query:
+if "search_selected" in st.session_state and st.session_state.search_selected:
     scope_name = st.session_state.search_selected
-    # Don't override location_type, keep user's selection
 else:
     scope_name = None if preset == "Cel svet" else preset
 
@@ -284,7 +283,8 @@ with tab1:
             with st.spinner("Nalagam..."):
                 try:
                     df_enrich = load_enrichment(location_type, scope_name)
-                    if scope_name == "Republic of Slovenia":
+                    df_enrich = df_enrich[~((df_enrich["name"] == "Republic of Slovenia") & (df_enrich["topic"] == "slovenija"))]
+                    if scope_name and "slovenia" in scope_name.lower():
                         df_enrich = df_enrich[df_enrich["topic"] != "slovenija"]
                     df_enrich_filtered = df_enrich[df_enrich["name"].isin(sel_locations)]
                     if df_enrich_filtered.empty:
@@ -300,7 +300,7 @@ with tab1:
             with st.spinner("Nalagam..."):
                 try:
                     df_temp = load_temporal(location_type, scope_name)
-                    if scope_name == "Republic of Slovenia":
+                    if scope_name and "slovenia" in scope_name.lower():
                         df_temp = df_temp[df_temp["topic"] != "slovenija"]
                     if df_temp.empty:
                         st.info("Ni podatkov.")
@@ -323,7 +323,7 @@ with tab2:
             if df.empty:
                 st.warning("Ni podatkov za izbrane nastavitve.")
             else:
-                if scope_name == "Republic of Slovenia":
+                if scope_name and "slovenia" in scope_name.lower():
                     df = df[df["topic"] != "slovenija"]
                 plot.temporal(df, "/tmp/temporal.html", color_mode=color_mode)
                 with open("/tmp/temporal.html", "r") as f:
@@ -332,14 +332,16 @@ with tab2:
             st.error(f"Napaka: {e}")
 
 with tab3:
+    #st.write(f"DEBUG scope_name: {scope_name}")
     st.subheader("Statistično značilne teme po lokacijah")
     with st.spinner("Nalagam..."):
         try:
             df = client.enrichment(location_type, scope_name)
+            df = df[~((df["name"] == "Republic of Slovenia") & (df["topic"] == "slovenija"))]
             if df.empty:
                 st.warning("Ni podatkov za izbrane nastavitve.")
             else:
-                if scope_name == "Republic of Slovenia":
+                if scope_name and "slovenia" in scope_name.lower():
                     df = df[df["topic"] != "slovenija"]
                 plot.enrichment(df, "/tmp/enrichment.html", color_mode=color_mode)
                 with open("/tmp/enrichment.html", "r") as f:
