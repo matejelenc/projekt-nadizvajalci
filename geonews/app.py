@@ -4,6 +4,7 @@ import streamlit.components.v1 as components
 from dotenv import load_dotenv
 from geonews.db import Client
 from geonews import plot
+import pandas as pd
 
 #prebere .env file
 load_dotenv()
@@ -54,6 +55,10 @@ def load_enrichment(location_type, scope_name):
 @st.cache_data
 def load_temporal(location_type, scope_name):
     return client.temporal(location_type, scope_name)
+
+@st.cache_data
+def load_articles_for_location(location_name):
+    return client.articles_for_location(location_name)
 
 
 # --- Helper to save and display html ---
@@ -169,7 +174,83 @@ with tab1:
                 f'<h3><span style="color:{color};">■</span> Skupnost {sel} — podrobnosti</h3>',
                 unsafe_allow_html=True
             )
-            st.write(f"**Lokacije ({len(sel_locations)}):** {', '.join(sorted(sel_locations))}")
+            st.write(f"**Lokacije ({len(sel_locations)}):**")
+
+            # Location selector
+            selected_location = st.selectbox(
+                "Izberi lokacijo za prikaz člankov",
+                options=["— izberi lokacijo —"] + sorted(sel_locations)
+            )
+
+            if selected_location != "— izberi lokacijo —":
+                st.markdown("---")
+                st.subheader(f"📰 Članki o: {selected_location}")
+
+                with st.spinner("Nalagam članke..."):
+                    df_articles = load_articles_for_location(selected_location)
+
+                if df_articles.empty:
+                    st.info("Ni člankov za to lokacijo.")
+                else:
+                    # Filters
+                    col_f1, col_f2, col_f3 = st.columns(3)
+
+                    with col_f1:
+                        topics = ["Vse teme"] + sorted(df_articles["topic"].dropna().unique().tolist())
+                        selected_topic = st.selectbox("Tema", topics)
+
+                    with col_f2:
+                        sentiments = ["Vsi sentimenti"] + sorted(df_articles["sentiment"].dropna().unique().tolist())
+                        selected_sentiment = st.selectbox("Sentiment", sentiments)
+
+                    with col_f3:
+                        sort_by = st.selectbox("Razvrsti po", ["Datum (najnovejši)", "Datum (najstarejši)", "Največ komentarjev"])
+
+                    # Apply filters
+                    df_filtered = df_articles.copy()
+                    if selected_topic != "Vse teme":
+                        df_filtered = df_filtered[df_filtered["topic"] == selected_topic]
+                    if selected_sentiment != "Vsi sentimenti":
+                        df_filtered = df_filtered[df_filtered["sentiment"] == selected_sentiment]
+
+                    # Apply sorting
+                    if sort_by == "Datum (najnovejši)":
+                        df_filtered = df_filtered.sort_values("date", ascending=False)
+                    elif sort_by == "Datum (najstarejši)":
+                        df_filtered = df_filtered.sort_values("date", ascending=True)
+                    elif sort_by == "Največ komentarjev":
+                        df_filtered = df_filtered.sort_values("n_comments", ascending=False)
+
+                    # Remove duplicates (same article can appear multiple times with different topics)
+                    df_filtered = df_filtered.drop_duplicates(subset=["id"])
+
+                    total = len(df_filtered)
+                    show_all = st.checkbox("Prikaži vse članke")
+                    if not show_all:
+                        top_n_articles = st.slider("Število člankov", min_value=5, max_value=min(100, total), value=10, step=5)
+                        df_filtered = df_filtered.head(top_n_articles)
+
+                    st.write(f"**Prikazujem {len(df_filtered)} od {total} člankov**")
+                    st.markdown("---")
+
+                    # Display articles
+                    for _, article in df_filtered.iterrows():
+                        col_text = st.container()
+
+                        with col_text:
+                            st.markdown(f"### [{article['title']}]({article['url']})")
+                            date_str = article['date'].strftime("%d. %m. %Y") if pd.notna(article['date']) else "neznan datum"
+                            comments = int(article['n_comments']) if pd.notna(article['n_comments']) else 0
+                            topic_str = article['topic'] if pd.notna(article['topic']) else "/"
+                            sentiment_str = article['sentiment'] if pd.notna(article['sentiment']) else "/"
+                            st.markdown(
+                                f"{date_str} &nbsp;|&nbsp; "
+                                f"{comments} komentarjev &nbsp;|&nbsp; "
+                                f"{topic_str} &nbsp;|&nbsp; "
+                                f"{sentiment_str}"
+                            )
+
+                        st.markdown("---")
 
             st.subheader("Značilne teme")
             with st.spinner("Nalagam..."):

@@ -460,3 +460,29 @@ class Client:
         
         coords = df[["name", "lat", "lon"]].drop_duplicates(subset=["name"])
         return df_enrich.merge(coords, on="name", how="left")
+    
+    def articles_for_location(self, location_name: str) -> pd.DataFrame:
+        """
+        Fetches all articles mentioning a specific location.
+        
+        Args:
+            location_name (str): Name of the location.
+        
+        Returns:
+            pd.DataFrame: Table with article data.
+        """
+        query = """
+            MATCH (a:Article)-[:MENTIONS_LOCATION]->(l:Location {name: $name})
+            OPTIONAL MATCH (a)-[:HAS_TOPIC]->(t:Topic)
+            OPTIONAL MATCH (a)-[:HAS_SENTIMENT]->(s:Sentiment)
+            RETURN a.id AS id, a.title AS title, a.url AS url, 
+                a.img AS img, a.date AS date, a.n_comments AS n_comments,
+                t.name AS topic, s.name AS sentiment
+            ORDER BY a.date DESC
+        """
+        df = self.gds.run_cypher(query, params={"name": location_name})
+        if df.empty:
+            return df
+        df['date'] = df['date'].astype(str).str[:19]
+        df['date'] = pd.to_datetime(df['date'], format='%Y-%m-%dT%H:%M:%S', errors='coerce')
+        return df
