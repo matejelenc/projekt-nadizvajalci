@@ -28,14 +28,42 @@ st.sidebar.header("Nastavitve")
 
 location_type = st.sidebar.selectbox(
     "Vrsta lokacije",
-    ["Settlement", "SovereignState"],
-    format_func=lambda x: "Naselja" if x == "Settlement" else "Države"
+    ["Settlement", "SovereignState", "AdministrativeDivision", "Continent"],
+    format_func=lambda x: {
+        "Settlement": "Naselja",
+        "SovereignState": "Države",
+        "AdministrativeDivision": "Administrativne enote",
+        "Continent": "Kontinenti"
+    }[x]
 )
 
 scope_options = ["Cel svet", "Republic of Slovenia", "Europe", "Asia", "United States"]
 preset = st.sidebar.selectbox("Izberi območje", scope_options)
-custom = st.sidebar.text_input("Ali vnesi po meri", placeholder="npr. Germany, Africa...")
-scope_name = custom if custom else (None if preset == "Cel svet" else preset)
+
+st.sidebar.markdown("---")
+st.sidebar.header("Iskanje lokacije")
+search_query = st.sidebar.text_input("Išči po imenu", placeholder="npr. Slovenija, Berlin...")
+
+if search_query:
+    results = client.search_locations(search_query, top_k=5)
+    if results.empty:
+        st.sidebar.warning("Ni rezultatov.")
+    else:
+        st.sidebar.write("Najboljši zadetki:")
+        for i, row in results.iterrows():
+            label = f"{row['name']} ({row['type']})"
+            # Use index i in key to avoid duplicates
+            if st.sidebar.button(label, key=f"search_{i}_{row['name']}"):
+                st.session_state.search_selected = row['name']
+                st.session_state.search_type = row['type']
+                st.rerun()
+
+# Use search result if selected, otherwise use preset
+if "search_selected" in st.session_state and search_query:
+    scope_name = st.session_state.search_selected
+    # Don't override location_type, keep user's selection
+else:
+    scope_name = None if preset == "Cel svet" else preset
 
 color_mode = st.sidebar.radio("Tema", ["dark", "light"])
 

@@ -486,3 +486,19 @@ class Client:
         df['date'] = df['date'].astype(str).str[:19]
         df['date'] = pd.to_datetime(df['date'], format='%Y-%m-%dT%H:%M:%S', errors='coerce')
         return df
+    
+    def search_locations(self, query: str, top_k: int = 5) -> pd.DataFrame:
+        """Search locations by alias."""
+        q = query.lower().strip()
+        result = self.gds.run_cypher("""
+            MATCH (a:LocationAlias)-[:ALIAS_OF]->(l:Location)
+            WHERE toLower(a.value) CONTAINS $q
+            WITH l, a
+            ORDER BY size(a.value)
+            WITH l, collect(a.value)[0] AS matched_alias
+            RETURN l.name AS name, l.type AS type,
+                l.latitude AS lat, l.longitude AS lon,
+                matched_alias
+            LIMIT $top_k
+        """, params={"q": q, "top_k": top_k})
+        return result

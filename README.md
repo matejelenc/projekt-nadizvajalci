@@ -41,5 +41,31 @@ After obtaining preprocessed data, which should be saved as separate `jsonl` fil
 ```
 After initialization, the database can be started/stopped using `docker compose`.
 
+### Web App
+
+After the database is running, install the app dependencies if you haven't already:
+
+```bash
+uv sync --extra app
+```
+
+Then start the web app by running:
+
+```bash
+PYTHONPATH=. uv run streamlit run geonews/app.py
+```
+
+The app will be available in your browser at [http://localhost:8501](http://localhost:8501).
+
+The app provides an interactive geographic analysis of MMC articles, including:
+- **Louvain** — geopolitical community detection on a location co-occurrence network, with clickable communities showing enriched topics and timeline
+- **Časovnica** — temporal evolution of news topics over time
+- **Enrichment** — statistically significant topic-location associations
+
+Use the sidebar to:
+- Filter by location type (settlements, countries, administrative divisions, continents)
+- Select a geographic scope from presets or search by name in Slovenian or English using the alias search
+- Switch between dark and light theme
+
 ### Development
 To add code, refer to the internal **geonews** module and follow **google-style** docstrings. Examples, short scripts and other tools, such as a simple [annotation app](./tools/annotate.py), can be found under [./tools](./tools).
