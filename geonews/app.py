@@ -160,7 +160,7 @@ with tab1:
                 st.markdown("---")
 
         # Details below when community is selected
-        if st.session_state.selected_community is not None:
+        if st.session_state.selected_community is not None and st.session_state.selected_community in community_locations:
             sel = st.session_state.selected_community
             sel_locations = community_locations.get(sel, set())
             color = community_colors[sel]
@@ -171,36 +171,36 @@ with tab1:
             )
             st.write(f"**Lokacije ({len(sel_locations)}):** {', '.join(sorted(sel_locations))}")
 
-            col1, col2 = st.columns(2)
+            st.subheader("Značilne teme")
+            with st.spinner("Nalagam..."):
+                try:
+                    df_enrich = load_enrichment(location_type, scope_name)
+                    if scope_name == "Republic of Slovenia":
+                        df_enrich = df_enrich[df_enrich["topic"] != "slovenija"]
+                    df_enrich_filtered = df_enrich[df_enrich["name"].isin(sel_locations)]
+                    if df_enrich_filtered.empty:
+                        st.info("Ni značilnih tem za to skupnost.")
+                    else:
+                        plot.enrichment(df_enrich_filtered, "/tmp/enrichment_comm.html", color_mode=color_mode)
+                        with open("/tmp/enrichment_comm.html", "r") as f:
+                            components.html(f.read(), height=500, scrolling=True)
+                except Exception as e:
+                    st.error(f"Napaka: {e}")
 
-            with col1:
-                st.subheader("Značilne teme")
-                with st.spinner("Nalagam..."):
-                    try:
-                        df_enrich = load_enrichment(location_type, scope_name)
-                        df_enrich_filtered = df_enrich[df_enrich["name"].isin(sel_locations)]
-                        if df_enrich_filtered.empty:
-                            st.info("Ni značilnih tem za to skupnost.")
-                        else:
-                            plot.enrichment(df_enrich_filtered, "/tmp/enrichment_comm.html", color_mode=color_mode)
-                            with open("/tmp/enrichment_comm.html", "r") as f:
-                                components.html(f.read(), height=500, scrolling=True)
-                    except Exception as e:
-                        st.error(f"Napaka: {e}")
-
-            with col2:
-                st.subheader("Časovnica tem")
-                with st.spinner("Nalagam..."):
-                    try:
-                        df_temp = load_temporal(location_type, scope_name)
-                        if df_temp.empty:
-                            st.info("Ni podatkov.")
-                        else:
-                            plot.temporal(df_temp, "/tmp/temporal_comm.html", color_mode=color_mode)
-                            with open("/tmp/temporal_comm.html", "r") as f:
-                                components.html(f.read(), height=500, scrolling=True)
-                    except Exception as e:
-                        st.error(f"Napaka: {e}")
+            st.subheader("Časovnica tem")
+            with st.spinner("Nalagam..."):
+                try:
+                    df_temp = load_temporal(location_type, scope_name)
+                    if scope_name == "Republic of Slovenia":
+                        df_temp = df_temp[df_temp["topic"] != "slovenija"]
+                    if df_temp.empty:
+                        st.info("Ni podatkov.")
+                    else:
+                        plot.temporal(df_temp, "/tmp/temporal_comm.html", color_mode=color_mode)
+                        with open("/tmp/temporal_comm.html", "r") as f:
+                            components.html(f.read(), height=500, scrolling=True)
+                except Exception as e:
+                    st.error(f"Napaka: {e}")
     else:
         st.warning("Ni podatkov za izbrane nastavitve.")
 
@@ -208,16 +208,32 @@ with tab1:
 
 with tab2:
     st.subheader("Razvoj tem skozi čas")
-    show_plot(
-        plot.temporal,
-        lambda: client.temporal(location_type, scope_name),
-        "/tmp/temporal.html"
-    )
+    with st.spinner("Nalagam..."):
+        try:
+            df = client.temporal(location_type, scope_name)
+            if df.empty:
+                st.warning("Ni podatkov za izbrane nastavitve.")
+            else:
+                if scope_name == "Republic of Slovenia":
+                    df = df[df["topic"] != "slovenija"]
+                plot.temporal(df, "/tmp/temporal.html", color_mode=color_mode)
+                with open("/tmp/temporal.html", "r") as f:
+                    components.html(f.read(), height=700, scrolling=True)
+        except Exception as e:
+            st.error(f"Napaka: {e}")
 
 with tab3:
     st.subheader("Statistično značilne teme po lokacijah")
-    show_plot(
-        plot.enrichment,
-        lambda: client.enrichment(location_type, scope_name),
-        "/tmp/enrichment.html"
-    )
+    with st.spinner("Nalagam..."):
+        try:
+            df = client.enrichment(location_type, scope_name)
+            if df.empty:
+                st.warning("Ni podatkov za izbrane nastavitve.")
+            else:
+                if scope_name == "Republic of Slovenia":
+                    df = df[df["topic"] != "slovenija"]
+                plot.enrichment(df, "/tmp/enrichment.html", color_mode=color_mode)
+                with open("/tmp/enrichment.html", "r") as f:
+                    components.html(f.read(), height=700, scrolling=True)
+        except Exception as e:
+            st.error(f"Napaka: {e}")

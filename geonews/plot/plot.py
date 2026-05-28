@@ -302,6 +302,7 @@ def enrichment(
         labels={'significance': 'Statistical Significance (Higher = Less likely by chance)'},
         template=template_name, color_discrete_sequence=px.colors.qualitative.Bold
     )
+    fig_bar.update_layout(height=700)
     fig_bar.write_html(output_filename)
 
 def nomogram(
