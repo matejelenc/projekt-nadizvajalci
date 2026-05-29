@@ -13,7 +13,7 @@ class Article:
     title: Optional[str] = None
     lead: Optional[str] = None 
     content: Optional[str] = None
-    keywords: list[str] = field(default_factory=list)
+    keywords: list[dict] = field(default_factory=list)
     url: Optional[str] = None
     figures: Optional[list[dict]] = None
     date: Optional[str] = None
@@ -52,6 +52,7 @@ def preprocess(articles_path : str) -> list[Article]:
 
             # Get keywords.
             keywords = record.get("keywords", []) + record.get("gpt_keywords", [])
+            keywords = [{"value": k.strip(), "normalized": k.strip().lower()} for k in keywords]
             if keywords: keywords = list(set(keywords))
 
             article = Article(

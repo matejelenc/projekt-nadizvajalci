@@ -198,15 +198,18 @@ class Importer:
         )
 
         // Keywords
-        FOREACH (keyword IN coalesce(row.keywords), []) |
+        FOREACH (keyword IN coalesce(row.keywords, []) |
+
             Merge (k:Keyword {
-                id: keyword
+                id: keyword.normalized
             })
             
             SET
-                k.value = keyword
+                k.value: keyword.value,
+                k.normalized: keyword.normalized
 
             MERGE (a)-[:HAS_KEYWORD]->(k)
+        )
         """
 
         self._import_jsonl_batched(jsonl_path, query)
