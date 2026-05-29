@@ -162,6 +162,14 @@ class Importer:
             SET a.title = row.title
         )
 
+        FOREACH (_ IN CASE WHEN row.lead IS NOT NULL THEN [1] ELSE [] END |
+            SET a.lead = row.lead
+        )
+
+        FOREACH (_ IN CASE WHEN row.content IS NOT NULL THEN [1] ELSE [] END |
+            SET a.content = row.content
+        )
+
         FOREACH (_ IN CASE WHEN row.url IS NOT NULL THEN [1] ELSE [] END |
             SET a.url = row.url
         )
@@ -187,6 +195,20 @@ class Importer:
                 f.source = fig.source
 
             MERGE (a)-[:HAS_FIGURE]->(f)
+        )
+
+        // Keywords
+        FOREACH (keyword IN coalesce(row.keywords, []) |
+
+            Merge (k:Keyword {
+                id: keyword.normalized
+            })
+            
+            SET
+                k.value = keyword.value,
+                k.normalized = keyword.normalized
+
+            MERGE (a)-[:HAS_KEYWORD]->(k)
         )
         """
 

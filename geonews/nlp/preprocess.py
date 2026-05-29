@@ -26,7 +26,7 @@ def get_args():
         "--pipeline", 
         nargs='*', 
         type=str,
-        default=["location"],
+        default=["article"],
         help="Parts of preprocessing to execute."
     )
     parser.add_argument(
