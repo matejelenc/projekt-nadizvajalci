@@ -162,6 +162,14 @@ class Importer:
             SET a.title = row.title
         )
 
+        FOREACH (_ IN CASE WHEN row.lead IS NOT NULL THEN [1] ELSE [] END |
+            SET a.lead = row.lead
+        )
+
+        FOREACH (_ IN CASE WHEN row.content IS NOT NULL THEN [1] ELSE [] END |
+            SET a.content = row.content
+        )
+
         FOREACH (_ IN CASE WHEN row.url IS NOT NULL THEN [1] ELSE [] END |
             SET a.url = row.url
         )
@@ -188,6 +196,17 @@ class Importer:
 
             MERGE (a)-[:HAS_FIGURE]->(f)
         )
+
+        // Keywords
+        FOREACH (keyword IN coalesce(row.keywords), []) |
+            Merge (k:Keyword {
+                id: keyword
+            })
+            
+            SET
+                k.value = keyword
+
+            MERGE (a)-[:HAS_KEYWORD]->(k)
         """
 
         self._import_jsonl_batched(jsonl_path, query)

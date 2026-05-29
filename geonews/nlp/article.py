@@ -1,6 +1,6 @@
 """Code for preprocessing articles."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 import json
 
@@ -11,6 +11,9 @@ class Article:
     """Maps to :Article label."""
     id: str
     title: Optional[str] = None
+    lead: Optional[str] = None 
+    content: Optional[str] = None
+    keywords: list[str] = field(default_factory=list)
     url: Optional[str] = None
     figures: Optional[list[dict]] = None
     date: Optional[str] = None
@@ -42,10 +45,22 @@ def preprocess(articles_path : str) -> list[Article]:
             if not n_comments: n_comments = 0
             else: n_comments = int(n_comments)
 
+            # Get paragraphs and join.
+            content = record.get("paragraphs", [])
+            if isinstance(content, list):
+                content = "\n".join(content)
+
+            # Get keywords.
+            keywords = record.get("keywords", []) + record.get("gpt_keywords", [])
+            if keywords: keywords = list(set(keywords))
+
             article = Article(
                 id=article_id,
                 date=record.get("date", None),
                 title=record.get("title", None),
+                content=content,
+                keywords=keywords,
+                lead=record.get("lead", None),
                 url=record.get("url", None),
                 figures=record.get("figures", None),
                 n_comments=n_comments,
