@@ -205,8 +205,8 @@ class Importer:
             })
             
             SET
-                k.value: keyword.value,
-                k.normalized: keyword.normalized
+                k.value = keyword.value,
+                k.normalized = keyword.normalized
 
             MERGE (a)-[:HAS_KEYWORD]->(k)
         )
