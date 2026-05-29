@@ -52,8 +52,8 @@ def preprocess(articles_path : str) -> list[Article]:
 
             # Get keywords.
             keywords = record.get("keywords", []) + record.get("gpt_keywords", [])
-            keywords = [{"value": k.strip(), "normalized": k.strip().lower()} for k in keywords]
             if keywords: keywords = list(set(keywords))
+            keywords = [{"value": k.strip(), "normalized": k.strip().lower()} for k in keywords]
 
             article = Article(
                 id=article_id,

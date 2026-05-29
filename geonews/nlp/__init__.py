@@ -9,5 +9,3 @@ Contains code for NLP.
 - 'util': Helper functions.
 - 'preprocess': Script for preprocessing the MMC dataset.
 """
-
-from . import location, sentiment, topic, article, util
