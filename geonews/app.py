@@ -93,6 +93,14 @@ def load_temporal(location_type, scope_name):
 def load_articles_for_location(location_name):
     return client.articles_for_location(location_name)
 
+@st.cache_data
+def load_cluster_keywords(location_names_tuple):
+    return client.cluster_keywords(list(location_names_tuple))
+
+@st.cache_data
+def load_cluster_sentiment(location_names_tuple):
+    return client.cluster_sentiment(list(location_names_tuple))
+
 
 # --- Helper to save and display html ---
 def show_plot(plot_func, client_func, tmp_path, **kwargs):
@@ -206,15 +214,81 @@ with tab1:
         if st.session_state.selected_community is not None and st.session_state.selected_community in community_locations:
             sel = st.session_state.selected_community
             sel_locations = community_locations.get(sel, set())
+            sel_locations_tuple = tuple(sorted(sel_locations))
             color = community_colors[sel]
 
             st.markdown(
-                f'<h3><span style="color:{color};">■</span> Skupnost {sel} — podrobnosti</h3>',
+                f'<h3><span style="color:{color};">■</span> Skupnost — podrobnosti</h3>',
                 unsafe_allow_html=True
             )
             st.write(f"**Lokacije ({len(sel_locations)}):**")
 
-            # Location selector
+            #NEW: Keywords and Sentiment side by side
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.subheader("Ključne besede skupnosti")
+                st.write("Besede ki se pojavljajo pogosteje v tej skupnosti kot drugje.")
+                with st.spinner("Nalagam ključne besede..."):
+                    try:
+                        df_kw = load_cluster_keywords(sel_locations_tuple)
+                        if df_kw.empty:
+                            st.info("Ni ključnih besed.")
+                        else:
+                            import plotly.express as px
+                            fig_kw = px.bar(
+                                df_kw.sort_values("score"),
+                                x="score", y="keyword",
+                                orientation="h",
+                                title="Značilne ključne besede",
+                                labels={"score": "Relativna pogostost", "keyword": ""},
+                                template="plotly_dark" if color_mode == "dark" else "plotly_white",
+                                color="score",
+                                color_continuous_scale="Viridis"
+                            )
+                            fig_kw.update_layout(height=500, margin=dict(l=0, r=0, t=30, b=0))
+                            st.plotly_chart(fig_kw, use_container_width=True)
+                    except Exception as e:
+                        st.error(f"Napaka: {e}")
+
+            with col2:
+                st.subheader("Sentiment skupnosti")
+                st.write("Primerjava sentimenta te skupnosti z globalnim povprečjem.")
+                with st.spinner("Nalagam sentiment..."):
+                    try:
+                        df_sent = load_cluster_sentiment(sel_locations_tuple)
+                        if df_sent.empty:
+                            st.info("Ni podatkov o sentimentu.")
+                        else:
+                            import plotly.graph_objects as go
+                            fig_sent = go.Figure()
+                            fig_sent.add_trace(go.Bar(
+                                name="Ta skupnost",
+                                x=df_sent["sentiment"],
+                                y=df_sent["cluster_pct"],
+                                marker_color="#4e79a7"
+                            ))
+                            fig_sent.add_trace(go.Bar(
+                                name="Globalno povprečje",
+                                x=df_sent["sentiment"],
+                                y=df_sent["global_pct"],
+                                marker_color="#f28e2b"
+                            ))
+                            fig_sent.update_layout(
+                                barmode="group",
+                                title="Sentiment: skupnost vs. globalno",
+                                yaxis_title="Delež člankov (%)",
+                                template="plotly_dark" if color_mode == "dark" else "plotly_white",
+                                height=400,
+                                margin=dict(l=0, r=0, t=30, b=0)
+                            )
+                            st.plotly_chart(fig_sent, use_container_width=True)
+                    except Exception as e:
+                        st.error(f"Napaka: {e}")
+
+            st.markdown("---")
+
+            #Location selector and articles
             selected_location = st.selectbox(
                 "Izberi lokacijo za prikaz člankov",
                 options=["— izberi lokacijo —"] + sorted(sel_locations)
@@ -222,7 +296,7 @@ with tab1:
 
             if selected_location != "— izberi lokacijo —":
                 st.markdown("---")
-                st.subheader(f"📰 Članki o: {selected_location}")
+                st.subheader(f"Članki o: {selected_location}")
 
                 with st.spinner("Nalagam članke..."):
                     df_articles = load_articles_for_location(selected_location)
@@ -230,7 +304,6 @@ with tab1:
                 if df_articles.empty:
                     st.info("Ni člankov za to lokacijo.")
                 else:
-                    # Filters
                     col_f1, col_f2, col_f3 = st.columns(3)
 
                     with col_f1:
@@ -244,14 +317,12 @@ with tab1:
                     with col_f3:
                         sort_by = st.selectbox("Razvrsti po", ["Datum (najnovejši)", "Datum (najstarejši)", "Največ komentarjev"])
 
-                    # Apply filters
                     df_filtered = df_articles.copy()
                     if selected_topic != "Vse teme":
                         df_filtered = df_filtered[df_filtered["topic"] == selected_topic]
                     if selected_sentiment != "Vsi sentimenti":
                         df_filtered = df_filtered[df_filtered["sentiment"] == selected_sentiment]
 
-                    # Apply sorting
                     if sort_by == "Datum (najnovejši)":
                         df_filtered = df_filtered.sort_values("date", ascending=False)
                     elif sort_by == "Datum (najstarejši)":
@@ -259,7 +330,6 @@ with tab1:
                     elif sort_by == "Največ komentarjev":
                         df_filtered = df_filtered.sort_values("n_comments", ascending=False)
 
-                    # Remove duplicates (same article can appear multiple times with different topics)
                     df_filtered = df_filtered.drop_duplicates(subset=["id"])
 
                     total = len(df_filtered)
@@ -271,10 +341,8 @@ with tab1:
                     st.write(f"**Prikazujem {len(df_filtered)} od {total} člankov**")
                     st.markdown("---")
 
-                    # Display articles
                     for _, article in df_filtered.iterrows():
                         col_text = st.container()
-
                         with col_text:
                             st.markdown(f"### [{article['title']}]({article['url']})")
                             date_str = article['date'].strftime("%d. %m. %Y") if pd.notna(article['date']) else "neznan datum"
@@ -287,9 +355,11 @@ with tab1:
                                 f"{topic_str} &nbsp;|&nbsp; "
                                 f"{sentiment_str}"
                             )
-
                         st.markdown("---")
 
+            st.markdown("---")
+
+            # Enrichment and Timeline
             st.subheader("Značilne teme")
             with st.spinner("Nalagam..."):
                 try:
@@ -321,8 +391,9 @@ with tab1:
                             components.html(f.read(), height=500, scrolling=True)
                 except Exception as e:
                     st.error(f"Napaka: {e}")
-    else:
-        st.warning("Ni podatkov za izbrane nastavitve.")
+
+        else:
+            st.warning("Ni podatkov za izbrane nastavitve.")
 
 
 

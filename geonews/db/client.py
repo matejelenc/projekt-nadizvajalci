@@ -507,3 +507,88 @@ class Client:
             LIMIT $top_k
         """, params={"q": q, "top_k": top_k})
         return result
+    
+    def cluster_keywords(self, location_names: list, top_k: int = 20) -> pd.DataFrame:
+        """
+        Gets top keywords for a cluster of locations using TF-IDF style comparison.
+        Counts keywords in cluster articles vs all articles.
+
+        Args:
+            location_names (list): List of location names in the cluster.
+            top_k (int): Number of top keywords to return.
+
+        Returns:
+            pd.DataFrame: Table with keywords and their relative frequency.
+        """
+        # Get keyword counts for articles mentioning cluster locations
+        cluster_query = """
+            MATCH (a:Article)-[:MENTIONS_LOCATION]->(l:Location)
+            WHERE l.name IN $locations
+            MATCH (a)-[:HAS_KEYWORD]->(k)
+            RETURN k.normalized AS keyword, count(DISTINCT a) AS cluster_count
+        """
+        df_cluster = self.gds.run_cypher(cluster_query, params={"locations": location_names})
+        if df_cluster.empty:
+            return df_cluster
+
+        # Get total keyword counts across all articles
+        total_query = """
+            MATCH (a:Article)-[:HAS_KEYWORD]->(k)
+            RETURN k.normalized AS keyword, count(DISTINCT a) AS total_count
+        """
+        df_total = self.gds.run_cypher(total_query)
+
+        # Merge and calculate relative frequency
+        df = df_cluster.merge(df_total, on="keyword", how="left")
+        total_articles = self.gds.run_cypher("MATCH (a:Article) RETURN count(a) AS total").iloc[0]["total"]
+        cluster_articles = self.gds.run_cypher("""
+            MATCH (a:Article)-[:MENTIONS_LOCATION]->(l:Location)
+            WHERE l.name IN $locations
+            RETURN count(DISTINCT a) AS total
+        """, params={"locations": location_names}).iloc[0]["total"]
+
+        # TF-IDF style score: how much more common in cluster vs globally
+        df["cluster_freq"] = df["cluster_count"] / max(cluster_articles, 1)
+        df["global_freq"] = df["total_count"] / max(total_articles, 1)
+        df["score"] = df["cluster_freq"] / (df["global_freq"] + 0.001)
+
+        # Filter short/meaningless keywords
+        df = df[df["keyword"].str.len() > 2]
+        df = df[df["cluster_count"] >= 2]
+
+        return df.nlargest(top_k, "score")[["keyword", "cluster_count", "score"]]
+
+
+    def cluster_sentiment(self, location_names: list) -> pd.DataFrame:
+        """
+        Gets sentiment distribution for a cluster vs global average.
+
+        Args:
+            location_names (list): List of location names in the cluster.
+
+        Returns:
+            pd.DataFrame: Table with sentiment counts for cluster and globally.
+        """
+        # Sentiment for cluster
+        cluster_query = """
+            MATCH (a:Article)-[:MENTIONS_LOCATION]->(l:Location)
+            WHERE l.name IN $locations
+            MATCH (a)-[:HAS_SENTIMENT]->(s:Sentiment)
+            RETURN s.name AS sentiment, count(DISTINCT a) AS cluster_count
+        """
+        df_cluster = self.gds.run_cypher(cluster_query, params={"locations": location_names})
+
+        # Global sentiment
+        global_query = """
+            MATCH (a:Article)-[:HAS_SENTIMENT]->(s:Sentiment)
+            RETURN s.name AS sentiment, count(DISTINCT a) AS global_count
+        """
+        df_global = self.gds.run_cypher(global_query)
+
+        df = df_cluster.merge(df_global, on="sentiment", how="outer").fillna(0)
+
+        # Normalize to percentages
+        df["cluster_pct"] = df["cluster_count"] / df["cluster_count"].sum() * 100
+        df["global_pct"] = df["global_count"] / df["global_count"].sum() * 100
+
+        return df
