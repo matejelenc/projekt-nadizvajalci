@@ -231,7 +231,8 @@ class Client:
             self,
             location_type: str = "Settlement", 
             scope_name: Optional[str] = None,
-            min_articles: int = 1  # <-- add this
+            min_articles: int = 1,
+            tolerance: float = 0.0001
         ) -> pd.DataFrame:
     
         """
@@ -288,7 +289,11 @@ class Client:
         )
 
         # Run Louvain and stream to python.
-        communities = self.gds.louvain.stream(G, relationshipWeightProperty="weight")
+        communities = self.gds.louvain.stream(
+            G, 
+            relationshipWeightProperty="weight",
+            tolerance=tolerance
+        )
         communities = communities.drop(columns=["intermediateCommunityIds"])
         communities.columns = ["nodeId", "community"]
 

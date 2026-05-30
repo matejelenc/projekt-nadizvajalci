@@ -23,6 +23,12 @@ def get_client():
 
 client = get_client()
 
+# Initialize session state
+if "selected_community" not in st.session_state:
+    st.session_state.selected_community = None
+if "last_clicked" not in st.session_state:
+    st.session_state.last_clicked = None
+
 #sidebar filters
 st.sidebar.header("Nastavitve")
 
@@ -72,8 +78,8 @@ st.sidebar.info(f"**Trenutne nastavitve:**\n\n Lokacije: {location_type}\n\n Obm
 
 # --- Cache data fetches so clicking doesn't re-query database ---
 @st.cache_data
-def load_louvain(location_type, scope_name, min_articles):
-    return client.louvain(location_type, scope_name, min_articles)
+def load_louvain(location_type, scope_name, min_articles, tolerance):
+    return client.louvain(location_type, scope_name, min_articles, tolerance)
 
 @st.cache_data
 def load_enrichment(location_type, scope_name):
@@ -114,22 +120,30 @@ tab1, tab2, tab3 = st.tabs([
 ])
 
 with tab1:
-    st.subheader("Geopolitične skupnosti lokacij")
-    st.write("Lokacije so pobarvane glede na skupnost (Louvain algoritem).")
+    st.subheader("Geopolitične gruče lokacij")
+    st.write("Lokacije so pobarvane glede na gručo (Louvain algoritem).")
 
     min_articles = st.slider(
         "Minimalno število člankov za upoštevanje lokacije",
         min_value=1, max_value=100, value=10, step=1
     )
 
+    tolerance = st.select_slider(
+        "Število skupnosti (višje = več skupnosti)",
+        options=[0.00001, 0.0001, 0.001, 0.01, 0.1],
+        value=0.0001
+    )
+
     with st.spinner("Nalagam Louvain..."):
         try:
-            df_louvain = load_louvain(location_type, scope_name, min_articles)
+            df_louvain = load_louvain(location_type, scope_name, min_articles, tolerance)
         except Exception as e:
             st.error(f"Napaka: {e}")
             df_louvain = None
 
     if df_louvain is not None and not df_louvain.empty:
+        if "selected_community" not in st.session_state:
+            st.session_state.selected_community = None
 
         # Build community → locations mapping
         community_locations = {}
@@ -156,40 +170,37 @@ with tab1:
             for c in unique_comms
         }
 
-        # Split into map (left) and community list (right)
-        col_map, col_communities = st.columns([3, 1])
+        # Clear button FIRST
+        if st.session_state.get("selected_community") is not None:
+            col_back, col_info = st.columns([1, 4])
+            with col_back:
+                if st.button("<- Nazaj"):
+                    st.session_state.selected_community = None
+                    st.session_state.last_clicked = None
+                    st.rerun()
+            with col_info:
+                st.info(f"Izbrana skupnost — klikni 'Nazaj' za prikaz vseh")
 
-        with col_map:
-            plot.louvain(df_louvain, "/tmp/louvain.html", color_mode=color_mode)
-            with open("/tmp/louvain.html", "r") as f:
-                components.html(f.read(), height=700, scrolling=True)
+        # Show map
+        chart_key = f"louvain_map_{st.session_state.get('selected_community')}_{st.session_state.get('last_clicked')}"
+        fig = plot.louvain_figure(
+            df_louvain, 
+            color_mode=color_mode,
+            selected_community=st.session_state.get("selected_community")
+        )
+        event = st.plotly_chart(fig, on_select="rerun", selection_mode="points", use_container_width=True, key=chart_key)
 
-        with col_communities:
-            st.subheader("Skupnosti")
-            if "selected_community" not in st.session_state:
-                st.session_state.selected_community = None
-
-            for comm_id, locations in sorted_communities:
-                color = community_colors[comm_id]
-                
-                # Count how many times each location appears as source or target
-                location_counts = {}
-                for _, row in df_louvain[df_louvain["community"] == comm_id].iterrows():
-                    location_counts[row["source"]] = location_counts.get(row["source"], 0) + 1
-                    location_counts[row["target"]] = location_counts.get(row["target"], 0) + 1
-                # Sort by count, take top 3
-                top3_list = sorted(location_counts, key=location_counts.get, reverse=True)[:3]
-                top3 = ", ".join(top3_list)
-
-                st.markdown(
-                    f'<span style="color:{color}; font-size:22px;">■</span> '
-                    f'**{top3}**<br>'
-                    f'<small style="color:gray;">{len(locations)} lokacij</small>',
-                    unsafe_allow_html=True
-                )
-                if st.button("Izberi", key=f"comm_{comm_id}"):
-                    st.session_state.selected_community = comm_id
-                st.markdown("---")
+        # Handle click
+        if event and event.selection and event.selection.points:
+            clicked_location = event.selection.points[0].get("text")
+            if clicked_location and clicked_location != st.session_state.get("last_clicked"):
+                st.session_state.last_clicked = clicked_location
+                for comm_id, locations in community_locations.items():
+                    if clicked_location in locations:
+                        st.session_state.selected_community = comm_id
+                        st.rerun()
+                        break
+        
 
         # Details below when community is selected
         if st.session_state.selected_community is not None and st.session_state.selected_community in community_locations:

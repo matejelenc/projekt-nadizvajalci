@@ -96,6 +96,81 @@ def louvain(
 
     fig.write_html(output_filename)
 
+def louvain_figure(
+        df_network: pd.DataFrame, 
+        max_nodes: int = 10000,
+        min_node_size: int = 10,
+        max_node_size: int = 50,
+        node_scale_factor: float = 0.7,
+        color_mode: Literal["dark", "light"] = "dark",
+        selected_community=None
+        ):
+    """
+    Same as louvain() but returns the Plotly figure instead of saving to HTML.
+    Used for interactive click events in Streamlit.
+    """
+    for col in ['source_lat', 'source_lon', 'target_lat', 'target_lon']:
+        df_network[col] = pd.to_numeric(df_network[col], errors='coerce')
+    df_network = df_network.dropna(subset=['source_lat', 'source_lon', 'target_lat', 'target_lon'])
+    
+    full_G = nx.from_pandas_edgelist(df_network, 'source', 'target', ['weight', 'community'])
+    node_importance = dict(full_G.degree())
+    top_nodes = sorted(node_importance, key=node_importance.get, reverse=True)[:max_nodes]
+
+    node_data = {}
+    for _, row in df_network.iterrows():
+        if row['source'] in top_nodes and row['source'] not in node_data:
+            node_data[row['source']] = {'lat': row['source_lat'], 'lon': row['source_lon'], 'community': row['community'], 'degree': node_importance[row['source']]}
+        if row['target'] in top_nodes and row['target'] not in node_data:
+            node_data[row['target']] = {'lat': row['target_lat'], 'lon': row['target_lon'], 'community': row['community'], 'degree': node_importance[row['target']]}
+
+    node_names = list(node_data.keys())
+    node_lats = [data['lat'] for data in node_data.values()]
+    node_lons = [data['lon'] for data in node_data.values()]
+    node_communities = [data['community'] for data in node_data.values()]
+    
+    hover_texts = [f"<b>{name}</b><br>Connections: {data['degree']}<br>Community: {data['community']}" for name, data in node_data.items()]
+    node_sizes = [max(min_node_size, min(data['degree'] * node_scale_factor, max_node_size)) for data in node_data.values()]
+    if selected_community is not None:
+        node_opacities = [0.9 if data['community'] == selected_community else 0.1 for data in node_data.values()]
+    else:
+        node_opacities = [0.9] * len(node_data)
+
+    unique_comms = sorted(set(node_communities))
+    cmap = plt.colormaps.get_cmap('tab20')
+    plotly_colors = [mcolors.to_hex(cmap(unique_comms.index(c) / max(1, len(unique_comms) - 1))) for c in node_communities]
+
+    is_light = color_mode.lower() == "light"
+    theme = {
+        "text": "black" if is_light else "white",
+        "bg": "rgb(255, 255, 255)" if is_light else "rgb(15, 15, 20)",
+        "land": "rgb(240, 240, 240)" if is_light else "rgb(40, 40, 40)",
+        "ocean": "rgb(255, 255, 255)" if is_light else "rgb(15, 15, 20)",
+        "borders": "rgb(180, 180, 180)" if is_light else "rgb(80, 80, 80)"
+    }
+
+    fig = go.Figure()
+    fig.add_trace(go.Scattergeo(
+        lon=node_lons, lat=node_lats, mode='markers',
+        text=node_names,
+        hovertext=hover_texts,
+        hoverinfo='text',
+        marker=dict(size=node_sizes, color=plotly_colors, line=dict(width=0.3, color=theme["bg"]), opacity=node_opacities),
+        customdata=node_communities
+    ))
+
+    fig.update_layout(
+        title=dict(text="Geopolitical News Hubs", font=dict(size=20, color=theme["text"])),
+        showlegend=False,
+        geo=dict(
+            projection_type="natural earth", showland=True, showocean=True, showlakes=True, showcountries=True,
+            landcolor=theme["land"], oceancolor=theme["ocean"], lakecolor=theme["ocean"],
+            countrycolor=theme["borders"], coastlinecolor=theme["borders"]
+        ),
+        paper_bgcolor=theme["bg"], plot_bgcolor=theme["bg"], margin=dict(l=0, r=0, t=50, b=0)
+    )
+    return fig
+
 def sankey(
         df: pd.DataFrame, 
         output_filename: str = "sankey_flow.html", 
