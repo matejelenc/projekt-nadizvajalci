@@ -102,6 +102,32 @@ def load_cluster_sentiment(location_names_tuple):
     return client.cluster_sentiment(list(location_names_tuple))
 
 
+def get_map_focus(scope_name):
+    """Returns center lat, lon and zoom scale for a given scope."""
+    if not scope_name:
+        return (20, 10, 1)  # whole world
+    
+    # Hardcoded zoom levels for known scopes
+    zoom_map = {
+        "Europe": 2.5,
+        "Asia": 1.5,
+        "Africa": 1.5,
+        "North America": 1.5,
+        "South America": 1.5,
+    }
+    
+    # Get coordinates from database
+    coords = client.get_location_center(scope_name)
+    if coords is None:
+        return (20, 10, 1)
+    
+    lat, lon = coords
+    # Use hardcoded zoom if available, otherwise guess based on location type
+    zoom = zoom_map.get(scope_name, 6)  # default zoom 6 for countries
+    
+    return (lat, lon, zoom)
+
+
 # --- Helper to save and display html ---
 def show_plot(plot_func, client_func, tmp_path, **kwargs):
     with st.spinner("Nalagam..."):
@@ -191,10 +217,14 @@ with tab1:
 
         # Show map
         chart_key = f"louvain_map_{st.session_state.get('selected_community')}_{st.session_state.get('last_clicked')}"
+        center_lat, center_lon, proj_scale = get_map_focus(scope_name)
         fig = plot.louvain_figure(
-            df_louvain, 
+            df_louvain,
             color_mode=color_mode,
-            selected_community=st.session_state.get("selected_community")
+            selected_community=st.session_state.get("selected_community"),
+            center_lat=center_lat,
+            center_lon=center_lon,
+            projection_scale=proj_scale
         )
         event = st.plotly_chart(fig, on_select="rerun", selection_mode="points", use_container_width=True, key=chart_key)
 

@@ -592,3 +592,23 @@ class Client:
         df["global_pct"] = df["global_count"] / df["global_count"].sum() * 100
 
         return df
+    
+    def get_location_center(self, location_name: str) -> tuple:
+        """
+        Gets the center coordinates for a location by name.
+        
+        Args:
+            location_name (str): Name of the location.
+        
+        Returns:
+            tuple: (lat, lon) or None if not found.
+        """
+        result = self.gds.run_cypher("""
+            MATCH (l:Location {name: $name})
+            RETURN l.latitude AS lat, l.longitude AS lon
+            LIMIT 1
+        """, params={"name": location_name})
+        
+        if result.empty or pd.isna(result.iloc[0]["lat"]):
+            return None
+        return (float(result.iloc[0]["lat"]), float(result.iloc[0]["lon"]))

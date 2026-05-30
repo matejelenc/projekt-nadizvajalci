@@ -103,7 +103,10 @@ def louvain_figure(
         max_node_size: int = 50,
         node_scale_factor: float = 0.7,
         color_mode: Literal["dark", "light"] = "dark",
-        selected_community=None
+        selected_community=None,
+        center_lat: float = 20,
+        center_lon: float = 10,
+        projection_scale: float = 1
         ):
     """
     Same as louvain() but returns the Plotly figure instead of saving to HTML.
@@ -163,11 +166,14 @@ def louvain_figure(
         showlegend=False,
         height=600,
         geo=dict(
-            projection_type="natural earth", showland=True, showocean=True, showlakes=True, showcountries=True,
+            projection_type="natural earth",
+            showland=True, showocean=True, showlakes=True, showcountries=True,
             landcolor=theme["land"], oceancolor=theme["ocean"], lakecolor=theme["ocean"],
             countrycolor=theme["borders"], coastlinecolor=theme["borders"],
             lataxis_range=[-60, 90],
             lonaxis_range=[-180, 180],
+            center=dict(lat=center_lat, lon=center_lon),
+            projection_scale=projection_scale
         ),
         paper_bgcolor=theme["bg"], plot_bgcolor=theme["bg"], margin=dict(l=0, r=0, t=0, b=0)
     )
