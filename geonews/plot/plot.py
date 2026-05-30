@@ -160,14 +160,16 @@ def louvain_figure(
     ))
 
     fig.update_layout(
-        title=dict(text="Geopolitical News Hubs", font=dict(size=20, color=theme["text"])),
         showlegend=False,
+        height=600,
         geo=dict(
             projection_type="natural earth", showland=True, showocean=True, showlakes=True, showcountries=True,
             landcolor=theme["land"], oceancolor=theme["ocean"], lakecolor=theme["ocean"],
-            countrycolor=theme["borders"], coastlinecolor=theme["borders"]
+            countrycolor=theme["borders"], coastlinecolor=theme["borders"],
+            lataxis_range=[-60, 90],
+            lonaxis_range=[-180, 180],
         ),
-        paper_bgcolor=theme["bg"], plot_bgcolor=theme["bg"], margin=dict(l=0, r=0, t=50, b=0)
+        paper_bgcolor=theme["bg"], plot_bgcolor=theme["bg"], margin=dict(l=0, r=0, t=0, b=0)
     )
     return fig
 
