@@ -612,3 +612,208 @@ class Client:
         if result.empty or pd.isna(result.iloc[0]["lat"]):
             return None
         return (float(result.iloc[0]["lat"]), float(result.iloc[0]["lon"]))
+    
+    def umap_keywords(
+            self,
+            location_type: str = "Settlement",
+            scope_name: Optional[str] = None,
+            min_articles: int = 5
+        ) -> pd.DataFrame:
+        """
+        Calculates keyword distributions per location and reduces them to 2D using UMAP.
+        Locations close together have similar keywords written about them.
+
+        Args:
+            location_type (str): Location type to use as nodes.
+            scope_name (str): Part of the world to analyze.
+            min_articles (int): Minimum number of articles for considering a location.
+
+        Returns:
+            pd.DataFrame: Table with UMAP coordinates and location info.
+        """
+        # Fetch keywords per location
+        if scope_name:
+            match_location = f"""
+            MATCH (l:Location {{type: '{location_type}'}})-[:PART_OF*0..5]->(parent:Location {{name: '{scope_name}'}})
+            """
+        else:
+            match_location = f"MATCH (l:Location {{type: '{location_type}'}})"
+
+        query = f"""
+            {match_location}
+            MATCH (a:Article)-[:MENTIONS_LOCATION]->(l)
+            MATCH (a)-[:HAS_KEYWORD]->(k)
+            RETURN l.name AS name, l.latitude AS lat, l.longitude AS lon,
+                a.id AS article_id, k.normalized AS keyword
+        """
+        df = self.gds.run_cypher(query)
+        if df.empty:
+            return df
+
+        # Clean coordinates
+        df = df.dropna(subset=['lat', 'lon', 'name'])
+        for col in ['lat', 'lon']:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+        df = df.dropna(subset=['lat', 'lon'])
+
+        # Filter locations with too few articles
+        article_counts = df.groupby('name')['article_id'].nunique()
+        valid_locations = article_counts[article_counts >= min_articles].index
+        df = df[df['name'].isin(valid_locations)]
+
+        if df.empty:
+            return df
+
+        # Build TF-IDF keyword matrix per location
+        # Count how many articles per location mention each keyword
+        keyword_counts = df.groupby(['name', 'keyword'])['article_id'].nunique().reset_index()
+        keyword_counts.columns = ['name', 'keyword', 'count']
+
+        # Pivot to matrix: rows = locations, columns = keywords
+        keyword_matrix = keyword_counts.pivot(index='name', columns='keyword', values='count').fillna(0)
+
+        # Keep only keywords that appear in at least 2 locations (remove noise)
+        keyword_matrix = keyword_matrix.loc[:, (keyword_matrix > 0).sum() >= 2]
+
+        # TF-IDF normalization
+        from sklearn.feature_extraction.text import TfidfTransformer
+        tfidf = TfidfTransformer()
+        tfidf_matrix = tfidf.fit_transform(keyword_matrix.values).toarray()
+
+        # Run PCA first to reduce dimensions
+        n_components = min(30, tfidf_matrix.shape[1], tfidf_matrix.shape[0] - 1)
+        if n_components < 2:
+            return pd.DataFrame()
+        pca = PCA(n_components=n_components)
+        pca_features = pca.fit_transform(tfidf_matrix)
+
+        # Run UMAP
+        n_neighbors = min(15, len(keyword_matrix) - 1)
+        reducer = umap.UMAP(n_neighbors=n_neighbors, min_dist=0.1, random_state=42)
+        embedding = reducer.fit_transform(pca_features)
+
+        # Build result table
+        results = pd.DataFrame({
+            'name': keyword_matrix.index,
+            'umap_x': embedding[:, 0],
+            'umap_y': embedding[:, 1],
+            'article_count': article_counts[keyword_matrix.index].values
+        })
+
+        # Add coordinates
+        coords = df[['name', 'lat', 'lon']].drop_duplicates(subset=['name'])
+        return results.merge(coords, on='name', how='left')
+    
+    def kmeans_keywords(
+            self,
+            location_type: str = "Settlement",
+            scope_name: Optional[str] = None,
+            k_clusters: int = 4,
+            min_articles: int = 5
+        ) -> pd.DataFrame:
+        """
+        Clusters locations based on keyword similarity using K-means.
+        
+        Args:
+            location_type (str): Location type to use as nodes.
+            scope_name (str): Part of the world to analyze.
+            k_clusters (int): Number of clusters.
+            min_articles (int): Minimum number of articles for a location.
+        
+        Returns:
+            pd.DataFrame: Locations with cluster ids and top keywords per cluster.
+        """
+        # Fetch keywords per location
+        if scope_name:
+            match_location = f"""
+            MATCH (l:Location {{type: '{location_type}'}})-[:PART_OF*0..5]->(parent:Location {{name: '{scope_name}'}})
+            """
+        else:
+            match_location = f"MATCH (l:Location {{type: '{location_type}'}})"
+
+        query = f"""
+            {match_location}
+            MATCH (a:Article)-[:MENTIONS_LOCATION]->(l)
+            MATCH (a)-[:HAS_KEYWORD]->(k)
+            RETURN l.name AS name, l.latitude AS lat, l.longitude AS lon,
+                a.id AS article_id, k.normalized AS keyword
+        """
+        df = self.gds.run_cypher(query)
+        if df.empty:
+            return df
+
+        # Clean coordinates
+        df = df.dropna(subset=['lat', 'lon', 'name'])
+        for col in ['lat', 'lon']:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+        df = df.dropna(subset=['lat', 'lon'])
+
+        # Filter locations with too few articles
+        article_counts = df.groupby('name')['article_id'].nunique()
+        valid_locations = article_counts[article_counts >= min_articles].index
+        df = df[df['name'].isin(valid_locations)]
+        if df.empty:
+            return df
+
+        # Build keyword count matrix
+        keyword_counts = df.groupby(['name', 'keyword'])['article_id'].nunique().reset_index()
+        keyword_counts.columns = ['name', 'keyword', 'count']
+        keyword_matrix = keyword_counts.pivot(index='name', columns='keyword', values='count').fillna(0)
+
+        # Keep keywords appearing in at least 2 locations
+        keyword_matrix = keyword_matrix.loc[:, (keyword_matrix > 0).sum() >= 2]
+
+        # TF-IDF normalization
+        from sklearn.feature_extraction.text import TfidfTransformer
+        tfidf = TfidfTransformer()
+        tfidf_matrix = tfidf.fit_transform(keyword_matrix.values).toarray()
+
+        # K-means clustering
+        k = min(k_clusters, len(keyword_matrix))
+        kmeans = KMeans(n_clusters=k, random_state=42, n_init="auto")
+        cluster_ids = kmeans.fit_predict(tfidf_matrix)
+
+        # Build result dataframe
+        result = pd.DataFrame({
+            'name': keyword_matrix.index,
+            'cluster_id': cluster_ids.astype(str),
+            'article_count': article_counts[keyword_matrix.index].values
+        })
+
+        # Add coordinates
+        coords = df[['name', 'lat', 'lon']].drop_duplicates(subset=['name'])
+        result = result.merge(coords, on='name', how='left')
+
+        # Find top keywords per cluster
+        keyword_matrix['cluster'] = cluster_ids
+        # Get TF-IDF scores per cluster for naming
+        tfidf_df = pd.DataFrame(tfidf_matrix, index=keyword_matrix.index, columns=keyword_matrix.columns[:-1] if 'cluster' in keyword_matrix.columns else keyword_matrix.columns)
+
+        # Find top keywords per cluster using TF-IDF distinctiveness
+        cluster_keywords = {}
+        cluster_tfidf_scores = {}
+
+        for cluster_id in range(k):
+            cluster_mask = keyword_matrix['cluster'] == cluster_id
+            cluster_tfidf = tfidf_df[cluster_mask].mean()
+            other_tfidf = tfidf_df[~cluster_mask].mean()
+            distinctiveness = (cluster_tfidf - other_tfidf).sort_values(ascending=False)
+            
+            # Top 5 for name
+            top_kw = distinctiveness.head(5).index.tolist()
+            cluster_keywords[str(cluster_id)] = ", ".join(top_kw)
+            
+            # Top 20 for chart — convert to percentage
+            top20 = (distinctiveness.head(20) * 100).reset_index()
+            top20.columns = ['keyword', 'score']
+            cluster_tfidf_scores[str(cluster_id)] = top20
+
+        result['cluster_keywords'] = result['cluster_id'].map(cluster_keywords)
+        result['cluster_label'] = result['cluster_id'].map(
+            lambda x: f"Gruča {x}: {cluster_keywords[x]}"
+        )
+        result['tfidf_keywords'] = result['cluster_id'].map(
+            lambda x: cluster_tfidf_scores[str(x)].to_json()
+        )
+
+        return result

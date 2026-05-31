@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 from geonews.db import Client
 from geonews import plot
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 
 #prebere .env file
 load_dotenv()
@@ -101,6 +103,10 @@ def load_cluster_keywords(location_names_tuple):
 def load_cluster_sentiment(location_names_tuple):
     return client.cluster_sentiment(list(location_names_tuple))
 
+@st.cache_data
+def load_kmeans_keywords(location_type, scope_name, k_clusters, min_articles):
+    return client.kmeans_keywords(location_type, scope_name, k_clusters, min_articles)
+
 
 def get_map_focus(scope_name):
     """Returns center lat, lon and zoom scale for a given scope."""
@@ -143,13 +149,10 @@ def show_plot(plot_func, client_func, tmp_path, **kwargs):
             st.error(f"Napaka: {e}")
 
 # --- Tabs ---
-tab1, tab2, tab3 = st.tabs([
+tab1, tab2, tab3, tab4 = st.tabs([
     "Louvain",
-    #"UMAP",
-    #"K-means",
-    #"Sankey",
+    "KMeans",
     "Časovnica",
-    #"Nomogram",
     "Enrichment"
 ])
 
@@ -253,33 +256,29 @@ with tab1:
             )
             st.write(f"**Lokacije ({len(sel_locations)}):**")
 
-            #NEW: Keywords and Sentiment side by side
+            # Keywords and Sentiment side by side
             col1, col2 = st.columns(2)
 
             with col1:
-                st.subheader("Ključne besede skupnosti")
-                st.write("Besede ki se pojavljajo pogosteje v tej skupnosti kot drugje.")
-                with st.spinner("Nalagam ključne besede..."):
-                    try:
-                        df_kw = load_cluster_keywords(sel_locations_tuple)
-                        if df_kw.empty:
-                            st.info("Ni ključnih besed.")
-                        else:
-                            import plotly.express as px
-                            fig_kw = px.bar(
-                                df_kw.sort_values("score"),
-                                x="score", y="keyword",
-                                orientation="h",
-                                title="Značilne ključne besede",
-                                labels={"score": "Relativna pogostost", "keyword": ""},
-                                template="plotly_dark" if color_mode == "dark" else "plotly_white",
-                                color="score",
-                                color_continuous_scale="Viridis"
-                            )
-                            fig_kw.update_layout(height=500, margin=dict(l=0, r=0, t=30, b=0))
-                            st.plotly_chart(fig_kw, use_container_width=True)
-                    except Exception as e:
-                        st.error(f"Napaka: {e}")
+                st.subheader("Ključne besede")
+                try:
+                    import json
+                    tfidf_data = json.loads(cluster_data['tfidf_keywords'].iloc[0])
+                    df_kw = pd.DataFrame(tfidf_data)
+                    df_kw = df_kw[df_kw['score'] > 0].sort_values('score')
+                    fig_kw = px.bar(
+                        df_kw,
+                        x="score", y="keyword",
+                        orientation="h",
+                        labels={"score": "TF-IDF distinctive score", "keyword": ""},
+                        template="plotly_dark" if not is_light else "plotly_white",
+                        color="score",
+                        color_continuous_scale="Viridis"
+                    )
+                    fig_kw.update_layout(height=400, margin=dict(l=0, r=0, t=0, b=0), showlegend=False)
+                    st.plotly_chart(fig_kw, use_container_width=True)
+                except Exception as e:
+                    st.error(f"Napaka: {e}")
 
             with col2:
                 st.subheader("Sentiment skupnosti")
@@ -427,7 +426,186 @@ with tab1:
 
 
 
+
 with tab2:
+    st.subheader("Semantične gruče lokacij")
+    st.write("Lokacije so združene glede na podobnost ključnih besed v novicah — ne glede na geografijo.")
+
+    col_s1, col_s2 = st.columns(2)
+    with col_s1:
+        min_articles_km = st.slider(
+            "Minimalno število člankov",
+            min_value=1, max_value=50, value=5, step=1,
+            key="km_min_articles"
+        )
+    with col_s2:
+        n_clusters_km = st.slider(
+            "Število gruč",
+            min_value=2, max_value=10, value=4, step=1,
+            key="km_n_clusters"
+        )
+
+    with st.spinner("Računam semantične gruče..."):
+        try:
+            df_km = load_kmeans_keywords(
+                location_type, scope_name, n_clusters_km, min_articles_km
+            )
+
+            if df_km is None or df_km.empty:
+                st.warning("Ni dovolj podatkov.")
+            else:
+                # Initialize session state for kmeans
+                if "selected_km_cluster" not in st.session_state:
+                    st.session_state.selected_km_cluster = None
+                if "last_clicked_km" not in st.session_state:
+                    st.session_state.last_clicked_km = None
+
+                # Back button
+                if st.session_state.selected_km_cluster is not None:
+                    if st.button("← Nazaj na vse gruče", key="km_back"):
+                        st.session_state.selected_km_cluster = None
+                        st.session_state.last_clicked_km = None
+                        st.rerun()
+
+                is_light = color_mode == "light"
+                # Build figure with opacity based on selected cluster
+                selected_km = st.session_state.selected_km_cluster
+
+                fig_km = go.Figure()
+
+                colors = px.colors.qualitative.Bold
+                cluster_ids = sorted(df_km['cluster_id'].unique())
+                color_map = {c: colors[i % len(colors)] for i, c in enumerate(cluster_ids)}
+
+                center_lat, center_lon, proj_scale = get_map_focus(scope_name)
+                fig_km = plot.kmeans_figure(
+                    df_km,
+                    color_mode=color_mode,
+                    selected_cluster=st.session_state.selected_km_cluster,
+                    center_lat=center_lat,
+                    center_lon=center_lon,
+                    projection_scale=proj_scale
+                )
+
+                km_event = st.plotly_chart(
+                    fig_km,
+                    use_container_width=True,
+                    on_select="rerun",
+                    selection_mode="points",
+                    key=f"km_chart_{st.session_state.selected_km_cluster}_{st.session_state.last_clicked_km}"
+                )
+
+                # Handle click
+                if km_event and km_event.selection and km_event.selection.points:
+                    clicked = km_event.selection.points[0]
+                    clicked_name = clicked.get("text") or clicked.get("hovertext")
+                    if clicked_name and clicked_name != st.session_state.last_clicked_km:
+                        st.session_state.last_clicked_km = clicked_name
+                        # Find cluster for this location
+                        match = df_km[df_km['name'] == clicked_name]
+                        if not match.empty:
+                            st.session_state.selected_km_cluster = match.iloc[0]['cluster_id']
+                            st.rerun()
+
+                # Show cluster details when selected
+                if st.session_state.selected_km_cluster is not None:
+                    cluster_data = df_km[df_km['cluster_id'] == st.session_state.selected_km_cluster]
+                    keywords = cluster_data['cluster_keywords'].iloc[0]
+                    locations = sorted(cluster_data['name'].tolist())
+
+                    st.markdown("---")
+                    st.subheader(f"Gruča: {keywords}")
+                    st.write(f"**{len(locations)} lokacij:** {', '.join(locations)}")
+
+                    col1, col2 = st.columns(2)
+
+                    with col1:
+                        st.subheader("Ključne besede")
+                        try:
+                            import json
+                            tfidf_data = json.loads(cluster_data['tfidf_keywords'].iloc[0])
+                            df_kw = pd.DataFrame(tfidf_data)
+                            df_kw = df_kw[df_kw['score'] > 0].sort_values('score')
+                            fig_kw = px.bar(
+                                df_kw,
+                                x="score", y="keyword",
+                                orientation="h",
+                                labels={"score": "Indeks značilnosti (%)", "keyword": ""},
+                                template="plotly_dark" if not is_light else "plotly_white",
+                                color="score",
+                                color_continuous_scale="Viridis"
+                            )
+                            fig_kw.update_layout(height=400, margin=dict(l=0, r=0, t=0, b=0), showlegend=False)
+                            st.plotly_chart(fig_kw, use_container_width=True)
+                        except Exception as e:
+                            st.error(f"Napaka: {e}")
+
+                    with col2:
+                        st.subheader("Sentiment")
+                        with st.spinner("Nalagam..."):
+                            try:
+                                df_sent = load_cluster_sentiment(tuple(sorted(locations)))
+                                if not df_sent.empty:
+                                    fig_sent = go.Figure()
+                                    fig_sent.add_trace(go.Bar(
+                                        name="Ta gruča",
+                                        x=df_sent["sentiment"],
+                                        y=df_sent["cluster_pct"],
+                                        marker_color="#4e79a7"
+                                    ))
+                                    fig_sent.add_trace(go.Bar(
+                                        name="Globalno",
+                                        x=df_sent["sentiment"],
+                                        y=df_sent["global_pct"],
+                                        marker_color="#f28e2b"
+                                    ))
+                                    fig_sent.update_layout(
+                                        barmode="group",
+                                        yaxis_title="Delež člankov (%)",
+                                        template="plotly_dark" if not is_light else "plotly_white",
+                                        height=400,
+                                        margin=dict(l=0, r=0, t=0, b=0)
+                                    )
+                                    st.plotly_chart(fig_sent, use_container_width=True)
+                            except Exception as e:
+                                st.error(f"Napaka: {e}")
+
+                    # Article selector
+                    st.markdown("---")
+                    selected_location_km = st.selectbox(
+                        "Izberi lokacijo za prikaz člankov",
+                        options=["— izberi lokacijo —"] + locations,
+                        key="km_location_select"
+                    )
+
+                    if selected_location_km != "— izberi lokacijo —":
+                        st.subheader(f"Članki o: {selected_location_km}")
+                        with st.spinner("Nalagam članke..."):
+                            df_articles = load_articles_for_location(selected_location_km)
+                        if df_articles.empty:
+                            st.info("Ni člankov.")
+                        else:
+                            df_articles = df_articles.drop_duplicates(subset=["id"])
+                            df_articles = df_articles.sort_values("date", ascending=False)
+                            total = len(df_articles)
+                            top_n = st.slider("Število člankov", min_value=5, max_value=min(100, total), value=10, step=5, key="km_articles_slider")
+                            df_articles = df_articles.head(top_n)
+                            st.write(f"**Prikazujem {len(df_articles)} od {total} člankov**")
+                            st.markdown("---")
+                            for _, article in df_articles.iterrows():
+                                st.markdown(f"### [{article['title']}]({article['url']})")
+                                date_str = article['date'].strftime("%d. %m. %Y") if pd.notna(article['date']) else "neznan datum"
+                                comments = int(article['n_comments']) if pd.notna(article['n_comments']) else 0
+                                topic_str = article['topic'] if pd.notna(article['topic']) else "/"
+                                sentiment_str = article['sentiment'] if pd.notna(article['sentiment']) else "/"
+                                st.markdown(f"{date_str} &nbsp;|&nbsp; {comments} komentarjev &nbsp;|&nbsp; {topic_str} &nbsp;|&nbsp; {sentiment_str}")
+                                st.markdown("---")
+
+        except Exception as e:
+            st.error(f"Napaka: {e}")
+
+
+with tab3:
     st.subheader("Razvoj tem skozi čas")
     with st.spinner("Nalagam..."):
         try:
@@ -443,7 +621,7 @@ with tab2:
         except Exception as e:
             st.error(f"Napaka: {e}")
 
-with tab3:
+with tab4:
     #st.write(f"DEBUG scope_name: {scope_name}")
     st.subheader("Statistično značilne teme po lokacijah")
     with st.spinner("Nalagam..."):

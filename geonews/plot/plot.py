@@ -328,6 +328,74 @@ def kmeans(
 
     fig.write_html(output_filename)
 
+def kmeans_figure(
+        df: pd.DataFrame,
+        color_mode: Literal["dark", "light"] = "dark",
+        selected_cluster=None,
+        center_lat: float = 20,
+        center_lon: float = 10,
+        projection_scale: float = 1
+        ):
+    """
+    Plot kmeans clusters on a world map, same style as louvain_figure.
+    """
+    is_light = color_mode.lower() == "light"
+    theme = {
+        "text": "black" if is_light else "white",
+        "bg": "rgb(255, 255, 255)" if is_light else "rgb(15, 15, 20)",
+        "land": "rgb(240, 240, 240)" if is_light else "rgb(40, 40, 40)",
+        "ocean": "rgb(255, 255, 255)" if is_light else "rgb(15, 15, 20)",
+        "borders": "rgb(180, 180, 180)" if is_light else "rgb(80, 80, 80)"
+    }
+
+    colors = px.colors.qualitative.Bold
+    cluster_ids = sorted(df['cluster_id'].unique())
+    color_map = {c: colors[i % len(colors)] for i, c in enumerate(cluster_ids)}
+
+    fig = go.Figure()
+
+    for cluster_id in cluster_ids:
+        cluster_data = df[df['cluster_id'] == cluster_id]
+
+        if selected_cluster is None:
+            opacity = 0.9
+        elif str(cluster_id) == str(selected_cluster):
+            opacity = 0.9
+        else:
+            opacity = 0.1
+
+        fig.add_trace(go.Scattergeo(
+            lat=cluster_data['lat'],
+            lon=cluster_data['lon'],
+            mode='markers',
+            name=cluster_data['cluster_label'].iloc[0],
+            text=cluster_data['name'],
+            hoverinfo='text',
+            marker=dict(
+                size=cluster_data['article_count'] / df['article_count'].max() * 25 + 5,
+                color=color_map[cluster_id],
+                opacity=opacity,
+                line=dict(width=0)
+            ),
+            customdata=cluster_data['cluster_id']
+        ))
+
+    fig.update_layout(
+        showlegend=False,
+        height=500,
+        margin=dict(l=0, r=0, t=0, b=0),
+        paper_bgcolor=theme["bg"],
+    )
+    fig.update_geos(
+        projection_type="natural earth",
+        showland=True, showocean=True, showlakes=True, showcountries=True,
+        landcolor=theme["land"], oceancolor=theme["ocean"], lakecolor=theme["ocean"],
+        countrycolor=theme["borders"], coastlinecolor=theme["borders"],
+        center=dict(lat=center_lat, lon=center_lon),
+        projection_scale=projection_scale
+    )
+    return fig    
+
 def umap(
         df_semantic: pd.DataFrame, 
         output_filename: str = "umap.html", 
