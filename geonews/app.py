@@ -67,9 +67,12 @@ if search_query:
                 st.rerun()
 
 # Use search result if selected, otherwise use preset
-if "search_selected" in st.session_state and st.session_state.search_selected:
+if "search_selected" in st.session_state and st.session_state.search_selected and search_query:
     scope_name = st.session_state.search_selected
 else:
+    # Clear search selection if search box is empty
+    if not search_query and "search_selected" in st.session_state:
+        st.session_state.search_selected = None
     scope_name = None if preset == "Cel svet" else preset
 
 color_mode = st.sidebar.radio("Tema", ["dark", "light"])
@@ -103,24 +106,42 @@ def load_cluster_keywords(location_names_tuple):
 def load_cluster_sentiment(location_names_tuple):
     return client.cluster_sentiment(list(location_names_tuple))
 
-@st.cache_data
+import hashlib
+import pickle
+import os
+
 def load_kmeans_keywords(location_type, scope_name, k_clusters, min_articles):
-    return client.kmeans_keywords(location_type, scope_name, k_clusters, min_articles)
+    # Create a unique cache key
+    cache_key = hashlib.md5(f"{location_type}{scope_name}{k_clusters}{min_articles}".encode()).hexdigest()
+    cache_path = f"/tmp/kmeans_cache_{cache_key}.pkl"
+    
+    # Load from disk if exists
+    if os.path.exists(cache_path):
+        with open(cache_path, 'rb') as f:
+            return pickle.load(f)
+    
+    # Otherwise compute and save
+    df = client.kmeans_keywords(location_type, scope_name, k_clusters, min_articles)
+    with open(cache_path, 'wb') as f:
+        pickle.dump(df, f)
+    return df
 
 
 def get_map_focus(scope_name):
-    """Returns center lat, lon and zoom scale for a given scope."""
     if not scope_name:
-        return (20, 10, 1)  # whole world
+        return (20, 10, 1)
     
-    # Hardcoded zoom levels for known scopes
-    zoom_map = {
-        "Europe": 2.5,
-        "Asia": 1.5,
-        "Africa": 1.5,
-        "North America": 1.5,
-        "South America": 1.5,
+    # Hardcoded for continents and regions
+    continent_zoom = {
+        "Europe": (54, 15, 2.5),
+        "Asia": (35, 90, 1.5),
+        "Africa": (0, 20, 1.5),
+        "North America": (45, -100, 1.5),
+        "South America": (-15, -60, 1.5),
+        "Oceania": (-25, 135, 2),
     }
+    if scope_name in continent_zoom:
+        return continent_zoom[scope_name]
     
     # Get coordinates from database
     coords = client.get_location_center(scope_name)
@@ -128,9 +149,34 @@ def get_map_focus(scope_name):
         return (20, 10, 1)
     
     lat, lon = coords
-    # Use hardcoded zoom if available, otherwise guess based on location type
-    zoom = zoom_map.get(scope_name, 6)  # default zoom 6 for countries
-    
+
+    # Get the bounding box to determine zoom
+    bbox = client.gds.run_cypher("""
+        MATCH (l:Location {name: $name})
+        MATCH (child:Location)-[:PART_OF*1..2]->(l)
+        WHERE child.latitude IS NOT NULL AND child.longitude IS NOT NULL
+        RETURN min(child.latitude) AS min_lat, max(child.latitude) AS max_lat,
+               min(child.longitude) AS min_lon, max(child.longitude) AS max_lon
+    """, params={"name": scope_name})
+
+    if not bbox.empty and bbox.iloc[0]["min_lat"] is not None:
+        lat_range = float(bbox.iloc[0]["max_lat"]) - float(bbox.iloc[0]["min_lat"])
+        lon_range = float(bbox.iloc[0]["max_lon"]) - float(bbox.iloc[0]["min_lon"])
+        max_range = max(lat_range, lon_range)
+
+        if max_range < 5:
+            zoom = 25
+        elif max_range < 15:
+            zoom = 12
+        elif max_range < 30:
+            zoom = 7
+        elif max_range < 60:
+            zoom = 4
+        else:
+            zoom = 2.5
+    else:
+        zoom = 6
+
     return (lat, lon, zoom)
 
 
