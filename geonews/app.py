@@ -475,7 +475,7 @@ with tab1:
 
 with tab2:
     st.subheader("Semantične gruče lokacij")
-    st.write("Lokacije so združene glede na podobnost ključnih besed v novicah — ne glede na geografijo.")
+    st.write("Lokacije so združene glede na podobnost ključnih besed v novicah.")
 
     col_s1, col_s2 = st.columns(2)
     with col_s1:
@@ -616,36 +616,76 @@ with tab2:
                             except Exception as e:
                                 st.error(f"Napaka: {e}")
 
-                    # Article selector
-                    st.markdown("---")
-                    selected_location_km = st.selectbox(
+                    #Location selector and articles
+                    selected_location = st.selectbox(
                         "Izberi lokacijo za prikaz člankov",
-                        options=["— izberi lokacijo —"] + locations,
-                        key="km_location_select"
+                        options=["— izberi lokacijo —"] + sorted(locations)
                     )
 
-                    if selected_location_km != "— izberi lokacijo —":
-                        st.subheader(f"Članki o: {selected_location_km}")
+                    if selected_location != "— izberi lokacijo —":
+                        st.markdown("---")
+                        st.subheader(f"Članki o: {selected_location}")
+
                         with st.spinner("Nalagam članke..."):
-                            df_articles = load_articles_for_location(selected_location_km)
+                            df_articles = load_articles_for_location(selected_location)
+
                         if df_articles.empty:
-                            st.info("Ni člankov.")
+                            st.info("Ni člankov za to lokacijo.")
                         else:
-                            df_articles = df_articles.drop_duplicates(subset=["id"])
-                            df_articles = df_articles.sort_values("date", ascending=False)
-                            total = len(df_articles)
-                            top_n = st.slider("Število člankov", min_value=5, max_value=min(100, total), value=10, step=5, key="km_articles_slider")
-                            df_articles = df_articles.head(top_n)
-                            st.write(f"**Prikazujem {len(df_articles)} od {total} člankov**")
+                            col_f1, col_f2, col_f3 = st.columns(3)
+
+                            with col_f1:
+                                topics = ["Vse teme"] + sorted(df_articles["topic"].dropna().unique().tolist())
+                                selected_topic = st.selectbox("Tema", topics)
+
+                            with col_f2:
+                                sentiments = ["Vsi sentimenti"] + sorted(df_articles["sentiment"].dropna().unique().tolist())
+                                selected_sentiment = st.selectbox("Sentiment", sentiments)
+
+                            with col_f3:
+                                sort_by = st.selectbox("Razvrsti po", ["Datum (najnovejši)", "Datum (najstarejši)", "Največ komentarjev"])
+
+                            df_filtered = df_articles.copy()
+                            if selected_topic != "Vse teme":
+                                df_filtered = df_filtered[df_filtered["topic"] == selected_topic]
+                            if selected_sentiment != "Vsi sentimenti":
+                                df_filtered = df_filtered[df_filtered["sentiment"] == selected_sentiment]
+
+                            if sort_by == "Datum (najnovejši)":
+                                df_filtered = df_filtered.sort_values("date", ascending=False)
+                            elif sort_by == "Datum (najstarejši)":
+                                df_filtered = df_filtered.sort_values("date", ascending=True)
+                            elif sort_by == "Največ komentarjev":
+                                df_filtered = df_filtered.sort_values("n_comments", ascending=False)
+
+                            df_filtered = df_filtered.drop_duplicates(subset=["id"])
+
+                            total = len(df_filtered)
+                            show_all = st.checkbox("Prikaži vse članke")
+                            if not show_all:
+                                top_n_articles = st.slider("Število člankov", min_value=5, max_value=min(100, total), value=10, step=5)
+                                df_filtered = df_filtered.head(top_n_articles)
+
+                            st.write(f"**Prikazujem {len(df_filtered)} od {total} člankov**")
                             st.markdown("---")
-                            for _, article in df_articles.iterrows():
-                                st.markdown(f"### [{article['title']}]({article['url']})")
-                                date_str = article['date'].strftime("%d. %m. %Y") if pd.notna(article['date']) else "neznan datum"
-                                comments = int(article['n_comments']) if pd.notna(article['n_comments']) else 0
-                                topic_str = article['topic'] if pd.notna(article['topic']) else "/"
-                                sentiment_str = article['sentiment'] if pd.notna(article['sentiment']) else "/"
-                                st.markdown(f"{date_str} &nbsp;|&nbsp; {comments} komentarjev &nbsp;|&nbsp; {topic_str} &nbsp;|&nbsp; {sentiment_str}")
+
+                            for _, article in df_filtered.iterrows():
+                                col_text = st.container()
+                                with col_text:
+                                    st.markdown(f"### [{article['title']}]({article['url']})")
+                                    date_str = article['date'].strftime("%d. %m. %Y") if pd.notna(article['date']) else "neznan datum"
+                                    comments = int(article['n_comments']) if pd.notna(article['n_comments']) else 0
+                                    topic_str = article['topic'] if pd.notna(article['topic']) else "/"
+                                    sentiment_str = article['sentiment'] if pd.notna(article['sentiment']) else "/"
+                                    st.markdown(
+                                        f"{date_str} &nbsp;|&nbsp; "
+                                        f"{comments} komentarjev &nbsp;|&nbsp; "
+                                        f"{topic_str} &nbsp;|&nbsp; "
+                                        f"{sentiment_str}"
+                                    )
                                 st.markdown("---")
+
+                    st.markdown("---")
 
         except Exception as e:
             st.error(f"Napaka: {e}")
